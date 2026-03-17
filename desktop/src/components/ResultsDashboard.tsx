@@ -1,6 +1,7 @@
-import type { AnalysisResult } from '../types';
-import ConversionGauge from './ConversionGauge';
-import DriversChart from './DriversChart';
+import { useState } from 'react';
+import type { AnalysisResult, CreativeBrief } from '../types';
+import MarketSnapshot from './MarketSnapshot';
+import MessagingDiagnostic from './MessagingDiagnostic';
 import TrendTable from './TrendTable';
 import CreativeFrameworks from './CreativeFrameworks';
 import AudienceSpecs from './AudienceSpecs';
@@ -10,6 +11,10 @@ function escapeCsvField(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
+}
+
+function isNewBriefFormat(fw: unknown): fw is CreativeBrief {
+  return typeof fw === 'object' && fw !== null && 'angle' in fw;
 }
 
 function exportToCSV(result: AnalysisResult): void {
@@ -23,14 +28,16 @@ function exportToCSV(result: AnalysisResult): void {
   rows.push(['Metadata', 'Benefit', result.benefit]);
   rows.push(['Metadata', 'Region', result.region]);
   rows.push(['Metadata', 'Timestamp', result.timestamp]);
-  rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis?.conversion_probability ?? '')]);
-  rows.push([]);
 
-  // Dimension Scores
-  rows.push(['Dimension Scores', 'Dimension', 'Score']);
-  for (const [dim, score] of Object.entries(result.conversion_analysis?.dimension_scores ?? {})) {
-    rows.push(['Dimension Scores', dim, String(score)]);
+  // Market Summary (if present)
+  if (result.market_summary) {
+    rows.push(['Metadata', 'Opportunity Score', String(result.market_summary.opportunity_score)]);
+    rows.push(['Metadata', 'Summary', result.market_summary.summary_text]);
+    rows.push(['Metadata', 'Top Angle', result.market_summary.top_angle]);
+    rows.push(['Metadata', 'Best Format', result.market_summary.best_format]);
   }
+
+  rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis?.conversion_probability ?? '')]);
   rows.push([]);
 
   // Trends
@@ -47,17 +54,18 @@ function exportToCSV(result: AnalysisResult): void {
   }
   rows.push([]);
 
-  // Drivers
-  rows.push(['Drivers', 'Factor', 'Type', 'Impact', 'Description']);
-  for (const d of result.conversion_analysis?.key_drivers ?? []) {
-    rows.push(['Drivers', d.factor, d.type, String(d.impact), d.description]);
-  }
-  rows.push([]);
-
-  // Creative Frameworks
-  rows.push(['Creative Frameworks', 'Name', 'Hook', 'CTA', 'Format', 'Why', 'Priority']);
-  for (const f of result.creative_frameworks) {
-    rows.push(['Creative Frameworks', f.name, f.hook, f.cta, f.format, f.why, f.test_priority]);
+  // Creative Briefs / Frameworks
+  const frameworks = result.creative_frameworks ?? [];
+  if (frameworks.length > 0 && isNewBriefFormat(frameworks[0])) {
+    rows.push(['Creative Briefs', 'Angle', 'Headline', 'Body Direction', 'CTA', 'Format', 'Platform', 'Priority', 'Why']);
+    for (const f of frameworks as CreativeBrief[]) {
+      rows.push(['Creative Briefs', f.angle, f.headline, f.body_direction, f.cta, f.format, f.platform, f.priority, f.why]);
+    }
+  } else {
+    rows.push(['Creative Frameworks', 'Name', 'Hook', 'CTA', 'Format', 'Why', 'Priority']);
+    for (const f of frameworks as Array<{ name: string; hook: string; cta: string; format: string; why: string; test_priority: string }>) {
+      rows.push(['Creative Frameworks', f.name, f.hook, f.cta, f.format, f.why, f.test_priority]);
+    }
   }
 
   const csvContent = rows.map((row) => row.map((cell) => escapeCsvField(cell)).join(',')).join('\n');
@@ -77,20 +85,6 @@ interface ResultsDashboardProps {
   result: AnalysisResult;
 }
 
-const DIMENSION_LABELS: Record<string, string> = {
-  emotional_valence: 'Emotional Valence',
-  attention_grab: 'Attention Grab',
-  trust_building: 'Trust Building',
-  urgency_pressure: 'Urgency / Pressure',
-  specificity: 'Specificity',
-};
-
-function barColor(value: number): string {
-  if (value >= 0.7) return 'bg-green-500';
-  if (value >= 0.4) return 'bg-yellow-500';
-  return 'bg-red-500';
-}
-
 const EMPTY_CONVERSION: AnalysisResult['conversion_analysis'] = {
   conversion_probability: 0,
   dimension_scores: {},
@@ -106,6 +100,8 @@ const EMPTY_SPECS: AnalysisResult['audience_specs'] = {
 };
 
 function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
+  const [trendsOpen, setTrendsOpen] = useState(false);
+
   const conversion_analysis = result.conversion_analysis?.conversion_probability != null
     ? result.conversion_analysis
     : EMPTY_CONVERSION;
@@ -115,44 +111,70 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
     ? result.audience_specs
     : EMPTY_SPECS;
 
+  const trendCount = Object.keys(validated_trends).length;
+
   return (
     <div className="space-y-6">
-      {/* Top row: gauge + dimension scores */}
-      <div className="flex gap-6 items-start">
-        <div className="w-[300px] flex-shrink-0">
-          <ConversionGauge probability={conversion_analysis.conversion_probability} />
-        </div>
-        <div className="flex-1 bg-gray-800/50 rounded-xl p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-3">Dimension Scores</h3>
-          <div className="space-y-3">
-            {Object.entries(conversion_analysis.dimension_scores).map(([key, value]) => (
-              <div key={key}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-300">{DIMENSION_LABELS[key] ?? key}</span>
-                  <span className="text-gray-400">{Math.round(value * 100)}%</span>
-                </div>
-                <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${barColor(value)}`}
-                    style={{ width: `${Math.round(value * 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+      {/* 1. Market Snapshot (compact top bar) */}
+      {result.market_summary ? (
+        <MarketSnapshot summary={result.market_summary} keyword={result.keyword} />
+      ) : (
+        <div className="bg-gray-800/50 rounded-xl p-4 flex items-center gap-3">
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white bg-gray-600">
+            {Math.round(conversion_analysis.conversion_probability)}
+          </span>
+          <div>
+            <span className="text-gray-100 font-semibold">&ldquo;{result.keyword}&rdquo;</span>
+            <p className="text-gray-400 text-sm">
+              Conversion probability: {Math.round(conversion_analysis.conversion_probability)}%
+            </p>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Drivers */}
-      <DriversChart drivers={conversion_analysis.key_drivers} />
+      {/* 2. Messaging Diagnostic */}
+      {Object.keys(conversion_analysis.dimension_scores).length > 0 && (
+        <MessagingDiagnostic
+          dimensionScores={conversion_analysis.dimension_scores}
+          dimensionTooltips={result.conversion_analysis?.dimension_tooltips}
+        />
+      )}
 
-      {/* Trends */}
-      <TrendTable trends={validated_trends} />
-
-      {/* Creative */}
+      {/* 3. Creative Briefs (main content) */}
       <CreativeFrameworks frameworks={creative_frameworks} />
 
-      {/* Audience + Recommendations */}
+      {/* 3. Market Signals (collapsible) */}
+      <div>
+        <button
+          onClick={() => setTrendsOpen(!trendsOpen)}
+          className="w-full flex items-center justify-between bg-gray-800/50 rounded-xl px-4 py-3 text-left hover:bg-gray-800/70 transition-colors"
+        >
+          <h3 className="text-lg font-semibold text-gray-200">
+            Market Signals
+            {trendCount > 0 && (
+              <span className="ml-2 text-sm font-normal text-gray-400">({trendCount})</span>
+            )}
+          </h3>
+          <svg
+            className={`h-5 w-5 text-gray-400 transition-transform ${trendsOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+        {trendsOpen && (
+          <div className="mt-2">
+            <TrendTable trends={validated_trends} />
+          </div>
+        )}
+      </div>
+
+      {/* 4. Platform Setup + Recommendations (side by side) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AudienceSpecs specs={audience_specs} />
         <div className="bg-gray-800/50 rounded-xl p-4">

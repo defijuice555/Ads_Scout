@@ -13,6 +13,7 @@ function AnalysisPage(): JSX.Element {
   const savedTimestamp = useRef<string | null>(null);
   const lastKeyword = useRef<string>('');
   const lastInput = useRef<AnalysisInput | null>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = (input: AnalysisInput): void => {
     lastKeyword.current = input.keyword;
@@ -30,6 +31,7 @@ function AnalysisPage(): JSX.Element {
     if (result && result.timestamp !== savedTimestamp.current) {
       savedTimestamp.current = result.timestamp;
       saveAnalysis(result);
+      mainRef.current?.scrollTo({ top: 0 });
     }
   }, [result]);
 
@@ -42,7 +44,7 @@ function AnalysisPage(): JSX.Element {
         <InputForm onSubmit={handleSubmit} loading={loading} />
       </div>
       {/* Main area */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div ref={mainRef} className="flex-1 overflow-y-auto p-6">
         {error && <ErrorBanner message={error} onRetry={handleRetry} />}
 
         {loading && <LoadingSkeleton keyword={lastKeyword.current || 'keyword'} />}

@@ -1,3 +1,23 @@
+export interface MarketSummary {
+  opportunity_score: number;
+  summary_text: string;
+  top_angle: string;
+  source_coverage: string;
+  best_format: string;
+  signal_count: number;
+}
+
+export interface CreativeBrief {
+  angle: string;
+  headline: string;
+  body_direction: string;
+  cta: string;
+  format: string;
+  platform: string;
+  why: string;
+  priority: string;
+}
+
 export interface AnalysisResult {
   keyword: string;
   product: string;
@@ -7,8 +27,9 @@ export interface AnalysisResult {
   sources: Record<string, { count: number; status: string }>;
   validated_trends: Record<string, TrendData>;
   conversion_analysis: ConversionAnalysis;
-  creative_frameworks: CreativeFramework[];
+  creative_frameworks: CreativeFramework[] | CreativeBrief[];
   audience_specs: AudienceSpecs;
+  market_summary?: MarketSummary;
   timestamp: string;
 }
 
@@ -21,9 +42,17 @@ export interface TrendData {
   demo_confidence?: number;
 }
 
+export interface DimensionTooltip {
+  label: string;
+  tooltip: string;
+  low_action: string;
+  high_action: string;
+}
+
 export interface ConversionAnalysis {
   conversion_probability: number;
   dimension_scores: Record<string, number>;
+  dimension_tooltips?: Record<string, DimensionTooltip>;
   key_drivers: Driver[];
   recommendations: string[];
 }

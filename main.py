@@ -22,6 +22,7 @@ from ads_scout.analysis import (
     apply_demographic_weighting,
     calculate_conversion_potential,
     generate_creative_matrix,
+    generate_market_summary,
     build_platform_audience_specs,
     save_insights,
 )
@@ -86,6 +87,9 @@ def run_analysis(keyword: str, product: str, audience: str, benefit: str, region
         # 8. Save insights
         save_insights(keyword, validated_trends, product, audience, benefit)
 
+    # 9. Market summary (always generated, even with empty trends)
+    summary = generate_market_summary(validated_trends, sources_status, keyword, analysis)
+
     return {
         "keyword": keyword,
         "product": product,
@@ -97,6 +101,7 @@ def run_analysis(keyword: str, product: str, audience: str, benefit: str, region
         "conversion_analysis": analysis,
         "creative_frameworks": variants,
         "audience_specs": specs,
+        "market_summary": summary,
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -159,16 +164,28 @@ def _print_human_readable(result: dict) -> None:
             print(f"  {i}. {tip}")
 
         # Creative matrix
-        print("\nORIGINAL AD FRAMEWORKS (NOT COPIES):")
+        print("\nCREATIVE BRIEFS:")
         if variants:
             for i, v in enumerate(variants, 1):
-                print(f"  {i}. {v['name']} [{v['test_priority']} priority]")
-                print(f"     Hook: {v['hook']}")
-                print(f"     CTA: {v['cta']} | Format: {v['format']}")
+                print(f"  {i}. {v['angle']} [{v['priority']} priority]")
+                print(f"     Headline: {v['headline']}")
+                print(f"     Direction: {v['body_direction']}")
+                print(f"     CTA: {v['cta']} | Format: {v['format']} | Platform: {v['platform']}")
                 print(f"     Why: {v['why']}")
                 print()
         else:
             print("  Focus on improving trust signals and specificity in your messaging")
+
+        # Market summary
+        market_summary = result.get("market_summary", {})
+        if market_summary:
+            print("MARKET SUMMARY:")
+            print(f"  Opportunity Score: {market_summary.get('opportunity_score', 0)}%")
+            print(f"  {market_summary.get('summary_text', '')}")
+            print(f"  Top Angle: {market_summary.get('top_angle', 'N/A')}")
+            print(f"  Best Format: {market_summary.get('best_format', 'N/A')}")
+            print(f"  Source Coverage: {market_summary.get('source_coverage', 'N/A')}")
+            print(f"  Signals Detected: {market_summary.get('signal_count', 0)}")
 
         # Platform audience specs
         print("PLATFORM AUDIENCE SPECS:")

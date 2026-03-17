@@ -105,15 +105,88 @@ FORMAT_PATTERNS = {
 
 # Commercial intent patterns — match common search suggestion phrases
 COMMERCIAL_PATTERNS = {
-    "purchase_intent": r"(buy|shop|order|price|cost|cheap|affordable|deal|discount|sale|coupon|best|top|review)",
-    "product_research": r"(how to|what is|which|where to|when to|can you|should i|worth|recommend)",
-    "product_attributes": r"(size|color|weight|material|thick|thin|large|small|portable|foldable|durable|eco|organic|natural)",
-    "use_case": r"(for beginners|for kids|for home|for gym|for travel|for exercise|for workout|at home|outdoor|indoor)",
-    "brand_comparison": r"(amazon|walmart|target|nike|lululemon|manduka|gaiam|brand|store)",
-    "accessory_interest": r"(bag|strap|towel|block|bolster|wheel|mat\s*cleaner|carrier|holder|rack|stand)",
+    "purchase_intent": r"(buy|shop|order|price|cost|cheap|affordable|deal|discount|sale|coupon|best|top|review|gift\s*set)",
+    "product_research": r"(how to|what is|which|where to|when to|can you|should i|worth|recommend|vs\b|or\b)",
+    "product_attributes": r"(size|color|weight|material|thick|thin|large|small|portable|foldable|durable|eco|organic|natural|korean|anti.?aging|sensitive|oily|dry|combination)",
+    "product_bundle": r"(set|kit|bundle|combo|pack|collection|system|routine|regimen|starter|essentials|basics)",
+    "use_case": r"(for beginners|for kids|for home|for gym|for travel|for exercise|for workout|at home|outdoor|indoor|for men|for women|for oily skin|for dry skin|for acne|for wrinkle|for face|for body)",
+    "brand_comparison": r"(amazon|walmart|target|nike|lululemon|manduka|gaiam|brand|store|sephora|ulta|cerave|retinol|niacinamide|hyaluronic)",
+    "accessory_interest": r"(bag|strap|towel|block|bolster|wheel|mat\s*cleaner|carrier|holder|rack|stand|serum|cream|moisturizer|cleanser|toner|sunscreen|mask|wand|roller|tool)",
 }
 
 TREND_PATTERNS = {**EMOTION_FRAMEWORK, **FORMAT_PATTERNS, **COMMERCIAL_PATTERNS}
+
+# ======================
+# TREND DISPLAY NAMES
+# ======================
+
+TREND_DISPLAY_NAMES = {
+    "purchase_intent": "Buy-Ready Signals",
+    "product_research": "Comparison Shopping",
+    "product_attributes": "Feature Interest",
+    "product_bundle": "Bundle Demand",
+    "use_case": "Solution Seeking",
+    "accessory_interest": "Cross-Sell Opportunity",
+    "brand_comparison": "Brand Awareness",
+    "joy_engagement": "Positive Emotion",
+    "joy_conversion": "Positive Emotion",
+    "trust_conversion": "Trust Signal",
+    "trust_engagement": "Trust Signal",
+    "surprise_engagement": "Surprise Factor",
+    "anticipation_engagement": "Anticipation",
+    "urgency_scarcity_conversion": "Urgency",
+    "risk_reversal_conversion": "Risk Reversal",
+    "risk_reversal_engagement": "Risk Reversal",
+    "social_proof_conversion": "Social Proof",
+    "specificity_conversion": "Specificity",
+    "specificity_engagement": "Specificity",
+    "curiosity_gap_engagement": "Curiosity Gap",
+    "format_video": "Video Format",
+    "format_image": "Image Format",
+    "format_carousel": "Carousel Format",
+    "format_text": "Text Format",
+    "power_words": "Power Words",
+    "comparative_language": "Comparative Language",
+}
+
+DIMENSION_TOOLTIPS = {
+    "engagement": {
+        "label": "Engagement",
+        "tooltip": "Measures attention-grabbing power of current messaging. Low = hooks are generic. Fix: add curiosity gaps, surprising stats, or power words.",
+        "low_action": "Your hook needs work. Test: surprising question or stat in first 3 seconds.",
+        "high_action": "Strong engagement signals. Your hook resonates — scale this angle."
+    },
+    "conversion": {
+        "label": "Purchase Readiness",
+        "tooltip": "How strong are buy-now signals. Low = audience isn't ready to purchase yet. Fix: add urgency, social proof, or risk-reversal.",
+        "low_action": "Audience needs education first. Run awareness before conversion campaigns.",
+        "high_action": "High purchase intent. Push conversion campaigns with strong CTAs."
+    },
+    "emotional_valence": {
+        "label": "Sentiment",
+        "tooltip": "Positive vs negative emotional tone in market signals. Low = messaging may feel fear-based. Fix: balance with positive/aspirational language.",
+        "low_action": "Current tone is neutral/negative. Add aspirational messaging.",
+        "high_action": "Positive sentiment. Audience responds to joy/optimism angles."
+    },
+    "attention_grab": {
+        "label": "Hook Strength",
+        "tooltip": "How well the ad hooks viewers in first 3 seconds. Low = opening is boring/generic. Fix: lead with surprise, question, or bold claim.",
+        "low_action": "Opening hook is weak. Test: 'Did you know...?' or bold stat opener.",
+        "high_action": "Strong hook potential. Use curiosity-gap openers."
+    },
+    "trust_building": {
+        "label": "Trust Score",
+        "tooltip": "How much the audience values proof and credibility. High = they need to see evidence before buying. Lead with certifications, lab tests, reviews.",
+        "low_action": "Trust isn't a key driver here. Focus on engagement and urgency instead.",
+        "high_action": "Trust is critical for this audience. Add proof: certifications, lab tests, 3rd-party validation."
+    },
+    "urgency_pressure": {
+        "label": "Urgency",
+        "tooltip": "How much FOMO/time-pressure exists in the market. Low = no reason to act now. Fix: add ethical scarcity (limited stock, early-bird offers).",
+        "low_action": "No urgency detected. Add ethical scarcity: limited offers, seasonal angle.",
+        "high_action": "Market has urgency signals. Capitalize with time-limited offers."
+    }
+}
 
 # ======================
 # CONVERSION MODEL

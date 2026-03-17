@@ -8,6 +8,25 @@ interface InputFormProps {
 
 const REGIONS = ['US', 'UK', 'CA', 'AU', 'DE', 'FR', 'BR', 'IN', 'JP'] as const;
 
+const PRESETS: { label: string; input: AnalysisInput }[] = [
+  {
+    label: 'Yoga Mat',
+    input: { keyword: 'eco friendly yoga mat', product: 'EarthMat Pro', audience: 'eco-conscious yogis 25-40', benefit: 'biodegradable non-slip grip', region: 'US' },
+  },
+  {
+    label: 'Protein Powder',
+    input: { keyword: 'protein powder', product: 'Whey Isolate Pro', audience: 'gym-goers aged 25-40', benefit: 'builds lean muscle fast', region: 'US' },
+  },
+  {
+    label: 'Skincare',
+    input: { keyword: 'anti aging skincare', product: 'GlowSerum', audience: 'women 30-50', benefit: 'visible wrinkle reduction in 2 weeks', region: 'US' },
+  },
+  {
+    label: 'Online Course',
+    input: { keyword: 'learn web development', product: 'CodeCamp Pro', audience: 'career changers 25-45', benefit: 'job-ready skills in 12 weeks', region: 'US' },
+  },
+];
+
 const inputClass =
   'w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none';
 
@@ -65,6 +84,23 @@ function InputForm({ onSubmit, loading }: InputFormProps): JSX.Element {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <h2 className="text-lg font-semibold text-white">Analysis Input</h2>
+
+      <div className="flex flex-wrap gap-2">
+        {PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setForm(p.input);
+              setErrors({});
+            }}
+            className="rounded-full border border-gray-700 bg-gray-800/60 px-3 py-1 text-xs text-gray-300 hover:border-blue-500 hover:text-white transition-colors disabled:opacity-50"
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-col">
         <label className={labelClass}>Keyword</label>

@@ -16,6 +16,7 @@ from typing import Dict, List, Any, Optional
 from ads_scout.config import (
     TREND_SOURCES, TREND_PATTERNS, EMOTION_FRAMEWORK, FORMAT_PATTERNS,
     CONVERSION_MODEL, DEMOGRAPHIC_TRIGGER_MAP, MIN_SOURCES_FOR_TREND, OUTPUT_DIR,
+    TREND_DISPLAY_NAMES, DIMENSION_TOOLTIPS,
 )
 
 logger = logging.getLogger(__name__)
@@ -147,12 +148,12 @@ def calculate_conversion_potential(validated_trends: Dict[str, Dict]) -> Dict[st
     }
 
     dimension_mapping = {
-        "engagement": ["curiosity_gap_engagement", "surprise_engagement", "anticipation_engagement", "power_words"],
-        "conversion": ["urgency_scarcity_conversion", "risk_reversal_conversion", "social_proof_conversion", "specificity_conversion", "trust_conversion"],
+        "engagement": ["curiosity_gap_engagement", "surprise_engagement", "anticipation_engagement", "power_words", "product_research", "use_case"],
+        "conversion": ["urgency_scarcity_conversion", "risk_reversal_conversion", "social_proof_conversion", "specificity_conversion", "trust_conversion", "purchase_intent", "product_bundle"],
         "emotional_valence": ["joy_conversion", "trust_conversion", "anticipation_conversion", "optimism_conversion", "-vigilance_conversion"],
-        "attention_grab": ["surprise_engagement", "curiosity_gap_engagement"],
-        "trust_building": ["trust_conversion", "specificity_conversion", "risk_reversal_conversion"],
-        "urgency_pressure": ["urgency_scarcity_conversion", "vigilance_conversion"],
+        "attention_grab": ["surprise_engagement", "curiosity_gap_engagement", "product_research"],
+        "trust_building": ["trust_conversion", "specificity_conversion", "risk_reversal_conversion", "product_attributes", "brand_comparison"],
+        "urgency_pressure": ["urgency_scarcity_conversion", "vigilance_conversion", "purchase_intent"],
     }
 
     for dimension, trend_list in dimension_mapping.items():
@@ -168,14 +169,88 @@ def calculate_conversion_potential(validated_trends: Dict[str, Dict]) -> Dict[st
         if weight_sum > 0:
             scores[dimension] = round(dimension_score / weight_sum, 3)
 
-    conversion_score = sum(scores.get(f, 0) * w for f, w in CONVERSION_MODEL.items())
-    conversion_probability = min(100, max(0, conversion_score * 50))
+    # --- Opportunity score (replaces broken CONVERSION_MODEL lookup) ---
+    commercial_keys = {"purchase_intent", "product_research", "product_attributes", "product_bundle", "use_case", "brand_comparison", "accessory_interest"}
+    commercial_count = sum(1 for k in validated_trends if k in commercial_keys)
+
+    # 1. Signal density: how many commercial signals detected (0-40 pts)
+    signal_score = min(40, commercial_count * 10)
+
+    # 2. Signal strength: avg weighted_score across all validated trends (0-35 pts)
+    if validated_trends:
+        avg_strength = sum(t.get("weighted_score", 0) for t in validated_trends.values()) / len(validated_trends)
+    else:
+        avg_strength = 0
+    strength_score = min(35, avg_strength * 50)
+
+    # 3. Source diversity bonus: validated trends need 2+ sources, more = better (0-25 pts)
+    if validated_trends:
+        avg_sources = sum(len(t.get("sources", [])) if isinstance(t.get("sources"), list) else t.get("sources", 0) for t in validated_trends.values()) / len(validated_trends)
+        source_score = min(25, avg_sources * 5)
+    else:
+        source_score = 0
+
+    conversion_probability = min(100, max(0, round(signal_score + strength_score + source_score, 1)))
 
     return {
         "conversion_probability": round(conversion_probability, 1),
         "dimension_scores": scores,
+        "dimension_tooltips": DIMENSION_TOOLTIPS,
         "key_drivers": _get_top_drivers(validated_trends, scores),
         "recommendations": _generate_optimization_tips(validated_trends, scores),
+    }
+
+
+def generate_market_summary(
+    validated_trends: Dict, sources_status: Dict, keyword: str, conversion_analysis: Dict,
+) -> Dict:
+    """Produce a concise market summary for the analysis output."""
+    opportunity_score = conversion_analysis.get("conversion_probability", 0)
+    signal_count = len(validated_trends)
+
+    # Source coverage
+    total_sources = len(sources_status)
+    active_sources = sum(1 for s in sources_status.values() if s.get("status") == "ok")
+    source_coverage = f"{active_sources} of {total_sources} sources returned data"
+
+    # Top angle — highest weighted_score trend
+    if validated_trends:
+        best_trend_key = max(
+            validated_trends,
+            key=lambda k: validated_trends[k].get("weighted_score", 0),
+        )
+        top_angle = TREND_DISPLAY_NAMES.get(best_trend_key, best_trend_key.replace("_", " ").title())
+    else:
+        top_angle = "General Awareness"
+
+    # Best format from format trends
+    format_scores = {
+        k.replace("format_", ""): v.get("weighted_score", 0)
+        for k, v in validated_trends.items()
+        if k.startswith("format_")
+    }
+    best_format = max(format_scores, key=format_scores.get) if format_scores else "image"
+
+    # Summary text
+    if signal_count > 0:
+        summary_text = (
+            f"Strong {'feature interest' if signal_count >= 4 else 'market signal'} "
+            f"detected across {active_sources} sources for '{keyword}'. "
+            f"Best angle: lead with {top_angle.lower()} claims."
+        )
+    else:
+        summary_text = (
+            f"Limited signals detected for '{keyword}' across {active_sources} sources. "
+            f"Consider broadening the keyword or testing general awareness campaigns."
+        )
+
+    return {
+        "opportunity_score": round(opportunity_score, 1),
+        "summary_text": summary_text,
+        "top_angle": top_angle,
+        "source_coverage": source_coverage,
+        "best_format": best_format,
+        "signal_count": signal_count,
     }
 
 
@@ -200,6 +275,23 @@ def _get_top_drivers(validated_trends: Dict, scores: Dict) -> List[Dict]:
                     "impact": round(validated_trends[key].get("weighted_score", 0), 3),
                     "description": f"{driver.replace('_', ' ').title()} effectiveness",
                 })
+
+    commercial_descriptions = {
+        "purchase_intent": "High commercial intent signals — audience ready to buy",
+        "product_research": "Active research phase — audience comparing options",
+        "product_attributes": "Feature-focused queries — audience values specifics",
+        "product_bundle": "Bundle/kit interest — upsell and AOV opportunity",
+        "use_case": "Use-case queries — audience seeking solutions for specific needs",
+        "brand_comparison": "Brand awareness — audience familiar with category leaders",
+        "accessory_interest": "Accessory demand — cross-sell and complementary product opportunity",
+    }
+    for key, desc in commercial_descriptions.items():
+        if key in validated_trends:
+            drivers.append({
+                "factor": key, "type": "commercial signal",
+                "impact": round(validated_trends[key].get("weighted_score", 0), 3),
+                "description": desc,
+            })
 
     drivers.sort(key=lambda x: x["impact"], reverse=True)
     return drivers[:5]
@@ -287,74 +379,159 @@ def build_platform_audience_specs(
 # CREATIVE MATRIX
 # ======================
 
+def _brief_priority(trend_data: Optional[Dict]) -> str:
+    """Return 'high' if weighted_score > 0.3 or sources >= 4, else 'medium'."""
+    if trend_data is None:
+        return "medium"
+    if trend_data.get("weighted_score", 0) > 0.3:
+        return "high"
+    if trend_data.get("count", 0) >= 4:
+        return "high"
+    return "medium"
+
+
+def _find_trend(demographic_trends: Dict, *keywords: str) -> Optional[Dict]:
+    """Return the first trend data dict whose key contains any of the keywords."""
+    for key, data in demographic_trends.items():
+        for kw in keywords:
+            if kw in key:
+                return data
+    return None
+
+
+def _top_trend_insight(demographic_trends: Dict) -> str:
+    """Return the display name of the highest-scoring trend."""
+    if not demographic_trends:
+        return "market trends"
+    best_key = max(
+        demographic_trends,
+        key=lambda k: demographic_trends[k].get("demo_weighted_score", demographic_trends[k].get("weighted_score", 0)),
+    )
+    return TREND_DISPLAY_NAMES.get(best_key, best_key.replace("_", " ").title())
+
+
+def _product_category(keyword: str, product_name: str) -> str:
+    """Derive a short product category label."""
+    return keyword if keyword else product_name
+
+
 def generate_creative_matrix(
     demographic_trends: Dict, product_name: str, audience: str, unique_benefit: str,
 ) -> List[Dict]:
-    variants = []
+    briefs: List[Dict] = []
+    category = _product_category("", product_name)
 
-    top_trends = sorted(
-        demographic_trends.items(),
-        key=lambda x: x[1].get("demo_weighted_score", 0),
-        reverse=True,
-    )[:2]
+    # Determine which signal groups are present
+    has_trust = _find_trend(demographic_trends, "product_attributes", "brand_comparison", "trust_conversion") is not None
+    has_offer = _find_trend(demographic_trends, "purchase_intent", "product_bundle") is not None
+    has_problem = _find_trend(demographic_trends, "product_research", "use_case") is not None
+    has_social = _find_trend(demographic_trends, "social_proof") is not None
 
-    format_scores = {
-        k.replace("format_", ""): v.get("demo_weighted_score", 0)
-        for k, v in demographic_trends.items()
-        if k.startswith("format_")
-    }
-    preferred_format = max(format_scores, key=format_scores.get) if format_scores else "image"
+    # Check if 4+ sources agree on any single trend
+    four_plus_sources = any(
+        v.get("count", 0) >= 4 for v in demographic_trends.values()
+    )
 
-    if top_trends:
-        trend1_name, trend1_data = top_trends[0]
-        trend1_base = trend1_name.replace("_engagement", "").replace("_conversion", "")
+    top_insight = _top_trend_insight(demographic_trends)
 
-        hook_templates = {
-            "risk_reversal": f"As a {audience}, try {product_name} risk-free—{unique_benefit} guaranteed or your money back.",
-            "social_proof": f"Join {audience} who switched to {product_name} for {unique_benefit}. See why they never went back.",
-            "specificity": f"How {product_name} delivers {unique_benefit}: [SPECIFIC MECHANISM] (tested by [AUTHORITY]).",
-            "anticipation": f"The {audience}'s upgrade is here: {product_name} with {unique_benefit}—early access now.",
-            "curiosity_gap": f"What most {audience} miss about {unique_benefit}—and how {product_name} fixes it.",
-        }
-        hook = hook_templates.get(trend1_base, f"Discover how {product_name} gives {audience} {unique_benefit}.")
+    # --- 1. Hook-First (always generated) ---
+    hook_trigger = _find_trend(demographic_trends, "surprise", "curiosity_gap", "joy", "anticipation")
+    briefs.append({
+        "angle": "Hook-First",
+        "headline": f"Did you know most {audience} overlook {top_insight} when choosing {category}?",
+        "body_direction": (
+            f"Open with a surprising question or stat. "
+            f"Pivot to how {product_name} solves this. "
+            f"End with {unique_benefit}."
+        ),
+        "cta": "See Why",
+        "format": "video",
+        "platform": "Meta Reels, TikTok, YouTube Shorts",
+        "why": f"Top engagement signal is {top_insight} — short-form video hooks capture attention fastest",
+        "priority": _brief_priority(hook_trigger),
+    })
 
-        cta_options = {
-            "video": ["Watch the Demo", "See How It Works"],
-            "image": ["Learn More", "See Details"],
-            "carousel": ["Explore Features", "Swipe Through Benefits"],
-        }
-        cta = cta_options.get(preferred_format, ["Learn More", "Get Started"])[0]
-
-        variants.append({
-            "name": f"{trend1_base.replace('_', ' ').title()}-First Framework",
-            "hook": hook, "cta": cta, "format": preferred_format,
-            "why": f"Leverages {trend1_base} (top trend for {audience}) + your unique truth",
-            "test_priority": "high" if trend1_data.get("demo_weighted_score", 0) > 0.6 else "medium",
+    # --- 2. Trust-First ---
+    if has_trust:
+        trust_data = _find_trend(demographic_trends, "product_attributes", "brand_comparison", "trust_conversion")
+        top_attr_insight = _top_trend_insight({
+            k: v for k, v in demographic_trends.items()
+            if any(t in k for t in ("product_attributes", "brand_comparison", "trust_conversion"))
+        })
+        briefs.append({
+            "angle": "Trust-First",
+            "headline": f"Independent sources confirm: {audience} prioritize {top_attr_insight} in {category}",
+            "body_direction": (
+                f"Lead with data/proof. "
+                f"Show specific features {audience} search for. "
+                f"Back with {unique_benefit}."
+            ),
+            "cta": "See the Proof",
+            "format": "carousel",
+            "platform": "Meta Feed, Google Display",
+            "why": f"Trust signals detected ({top_attr_insight}) — proof-led creatives convert high-consideration buyers",
+            "priority": _brief_priority(trust_data),
         })
 
-    if len(top_trends) > 1 and top_trends[1][1].get("demo_weighted_score", 0) > 0.4:
-        trend2_name, trend2_data = top_trends[1]
-        trend2_base = trend2_name.replace("_engagement", "").replace("_conversion", "")
+    # --- 3. Offer-First ---
+    if has_offer:
+        offer_data = _find_trend(demographic_trends, "purchase_intent", "product_bundle")
+        briefs.append({
+            "angle": "Offer-First",
+            "headline": f"The complete {category} solution: {product_name} delivers {unique_benefit}",
+            "body_direction": (
+                f"Lead with the value package. "
+                f"{'Suggest bundle angle — bundle demand detected. ' if _find_trend(demographic_trends, 'product_bundle') else ''}"
+                f"Emphasize complete solution."
+            ),
+            "cta": "Get Started",
+            "format": "carousel",
+            "platform": "Meta Carousel, Google Shopping",
+            "why": "Purchase intent or bundle demand detected — offer-led creative captures ready-to-buy audience",
+            "priority": _brief_priority(offer_data),
+        })
 
-        compatible_pairs = [
-            ("risk_reversal", "social_proof"),
-            ("specificity", "anticipation"),
-            ("joy", "curiosity_gap"),
-        ]
-        pair = (trend1_base, trend2_base)
-        if pair in compatible_pairs or (trend2_base, trend1_base) in compatible_pairs:
-            hook = (
-                f"As a {audience}, experience {unique_benefit} with {product_name}"
-                f"—{trend1_base.replace('_', ' ')} proven by {trend2_base.replace('_', ' ')}."
-            )
-            variants.append({
-                "name": f"{trend1_base.replace('_', ' ').title()}+{trend2_base.replace('_', ' ').title()} Combo",
-                "hook": hook, "cta": "Get Yours Today", "format": preferred_format,
-                "why": f"Combines {trend1_base} + {trend2_base} (top 2 trends)",
-                "test_priority": "high",
-            })
+    # --- 4. Problem-First ---
+    if has_problem:
+        problem_data = _find_trend(demographic_trends, "product_research", "use_case")
+        briefs.append({
+            "angle": "Problem-First",
+            "headline": f"Still searching for the right {category}? Here's what {audience} actually need",
+            "body_direction": (
+                f"Acknowledge the search frustration. "
+                f"Position {product_name} as the answer to their research. "
+                f"Deliver {unique_benefit} as proof."
+            ),
+            "cta": "Find Your Solution",
+            "format": "video",
+            "platform": "Google Search, YouTube Pre-roll",
+            "why": "Active research/use-case queries detected — problem-aware copy meets the audience mid-funnel",
+            "priority": _brief_priority(problem_data),
+        })
 
-    return variants
+    # --- 5. Social-Proof-First ---
+    if has_social or four_plus_sources:
+        social_data = _find_trend(demographic_trends, "social_proof")
+        briefs.append({
+            "angle": "Social-Proof-First",
+            "headline": f"{audience} are choosing {product_name} for {unique_benefit} — here's why",
+            "body_direction": (
+                f"Lead with crowd validation. "
+                f"Show that the market is moving toward {category}. "
+                f"Use {unique_benefit} as differentiator."
+            ),
+            "cta": "Join Them",
+            "format": "video",
+            "platform": "Meta Stories, Instagram",
+            "why": (
+                "Social proof signals detected"
+                + (" and 4+ sources agree on trend direction" if four_plus_sources else "")
+                + " — crowd validation drives action"
+            ),
+            "priority": _brief_priority(social_data),
+        })
+
+    return briefs
 
 
 # ======================
