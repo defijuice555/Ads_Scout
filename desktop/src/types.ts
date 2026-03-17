@@ -68,6 +68,9 @@ declare global {
   interface Window {
     electronAPI: {
       runAnalysis: (args: AnalysisInput) => Promise<AnalysisResult>;
+      getHistory: () => Promise<AnalysisResult[]>;
+      saveHistoryEntry: (entry: AnalysisResult) => Promise<void>;
+      deleteHistoryEntry: (timestamp: string) => Promise<void>;
       platform: string;
     };
   }

@@ -1,20 +1,35 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AnalysisPage from './pages/AnalysisPage';
 import HistoryPage from './pages/HistoryPage';
+
+function NavBar(): JSX.Element {
+  const location = useLocation();
+  const isActive = (p: string): boolean => location.pathname === p;
+
+  return (
+    <nav className="flex items-center gap-6 border-b border-gray-800 px-6 py-3">
+      <span className="text-lg font-bold text-indigo-400">Ads Scout</span>
+      <Link
+        to="/"
+        className={`text-sm ${isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+      >
+        Analysis
+      </Link>
+      <Link
+        to="/history"
+        className={`text-sm ${isActive('/history') ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+      >
+        History
+      </Link>
+    </nav>
+  );
+}
 
 function App(): JSX.Element {
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-gray-950 text-white">
-        <nav className="flex items-center gap-6 border-b border-gray-800 px-6 py-3">
-          <span className="text-lg font-bold text-indigo-400">Ads Scout</span>
-          <Link to="/" className="text-sm text-gray-300 hover:text-white">
-            Analysis
-          </Link>
-          <Link to="/history" className="text-sm text-gray-300 hover:text-white">
-            History
-          </Link>
-        </nav>
+        <NavBar />
         <Routes>
           <Route path="/" element={<AnalysisPage />} />
           <Route path="/history" element={<HistoryPage />} />

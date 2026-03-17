@@ -1,9 +1,19 @@
+import { useEffect, useRef } from 'react';
 import { usePythonAnalysis } from '../hooks/usePythonAnalysis';
 import InputForm from '../components/InputForm';
 import ResultsDashboard from '../components/ResultsDashboard';
+import { saveAnalysis } from '../lib/storage';
 
 function AnalysisPage(): JSX.Element {
   const { result, loading, error, runAnalysis } = usePythonAnalysis();
+  const savedTimestamp = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (result && result.timestamp !== savedTimestamp.current) {
+      savedTimestamp.current = result.timestamp;
+      saveAnalysis(result);
+    }
+  }, [result]);
 
   return (
     <div className="flex h-[calc(100vh-49px)]">

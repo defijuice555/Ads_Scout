@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5173';
 
@@ -60,6 +62,42 @@ ipcMain.handle('run-analysis', async (_event, args: {
       }
     });
   });
+});
+
+function getHistoryPath(): string {
+  const dir = path.join(os.homedir(), '.ads-scout');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return path.join(dir, 'history.json');
+}
+
+function readHistory(): unknown[] {
+  const p = getHistoryPath();
+  if (!fs.existsSync(p)) return [];
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {
+    return [];
+  }
+}
+
+function writeHistory(entries: unknown[]): void {
+  fs.writeFileSync(getHistoryPath(), JSON.stringify(entries, null, 2));
+}
+
+ipcMain.handle('get-history', async () => readHistory());
+
+ipcMain.handle('save-history-entry', async (_event, entry: unknown) => {
+  const history = readHistory();
+  history.unshift(entry);
+  writeHistory(history);
+});
+
+ipcMain.handle('delete-history-entry', async (_event, timestamp: string) => {
+  const history = readHistory();
+  const filtered = history.filter((e: unknown) => (e as { timestamp: string }).timestamp !== timestamp);
+  writeHistory(filtered);
 });
 
 function createWindow(): void {
