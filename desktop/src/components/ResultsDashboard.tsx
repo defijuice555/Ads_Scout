@@ -5,6 +5,74 @@ import TrendTable from './TrendTable';
 import CreativeFrameworks from './CreativeFrameworks';
 import AudienceSpecs from './AudienceSpecs';
 
+function escapeCsvField(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function exportToCSV(result: AnalysisResult): void {
+  const rows: string[][] = [];
+
+  // Metadata
+  rows.push(['Section', 'Field', 'Value']);
+  rows.push(['Metadata', 'Keyword', result.keyword]);
+  rows.push(['Metadata', 'Product', result.product]);
+  rows.push(['Metadata', 'Audience', result.audience]);
+  rows.push(['Metadata', 'Benefit', result.benefit]);
+  rows.push(['Metadata', 'Region', result.region]);
+  rows.push(['Metadata', 'Timestamp', result.timestamp]);
+  rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis.conversion_probability)]);
+  rows.push([]);
+
+  // Dimension Scores
+  rows.push(['Dimension Scores', 'Dimension', 'Score']);
+  for (const [dim, score] of Object.entries(result.conversion_analysis.dimension_scores)) {
+    rows.push(['Dimension Scores', dim, String(score)]);
+  }
+  rows.push([]);
+
+  // Trends
+  rows.push(['Trends', 'Trend', 'Count', 'Weighted Score', 'Confidence', 'Sources']);
+  for (const [trend, data] of Object.entries(result.validated_trends)) {
+    rows.push([
+      'Trends',
+      trend,
+      String(data.count),
+      String(data.weighted_score),
+      String(data.confidence),
+      data.sources.join('; '),
+    ]);
+  }
+  rows.push([]);
+
+  // Drivers
+  rows.push(['Drivers', 'Factor', 'Type', 'Impact', 'Description']);
+  for (const d of result.conversion_analysis.key_drivers) {
+    rows.push(['Drivers', d.factor, d.type, String(d.impact), d.description]);
+  }
+  rows.push([]);
+
+  // Creative Frameworks
+  rows.push(['Creative Frameworks', 'Name', 'Hook', 'CTA', 'Format', 'Why', 'Priority']);
+  for (const f of result.creative_frameworks) {
+    rows.push(['Creative Frameworks', f.name, f.hook, f.cta, f.format, f.why, f.test_priority]);
+  }
+
+  const csvContent = rows.map((row) => row.map((cell) => escapeCsvField(cell)).join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0, 10);
+  const filename = `ads-scout-${result.keyword.replace(/\s+/g, '-').toLowerCase()}-${date}.csv`;
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 interface ResultsDashboardProps {
   result: AnalysisResult;
 }
@@ -78,6 +146,23 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
             <p className="text-gray-500">No recommendations available</p>
           )}
         </div>
+      </div>
+
+      {/* Export */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => exportToCSV(result)}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path
+              fillRule="evenodd"
+              d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Export CSV
+        </button>
       </div>
     </div>
   );
