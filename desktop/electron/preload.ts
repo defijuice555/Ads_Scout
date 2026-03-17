@@ -1,9 +1,6 @@
-import { contextBridge } from 'electron';
-
-// TODO (Task 3): Expose IPC methods via contextBridge
-// e.g. ipcRenderer.invoke('run-analysis', ...), ipcRenderer.invoke('get-history', ...)
+import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Placeholder — real methods added in Task 3
+  runAnalysis: (args: Record<string, string>) => ipcRenderer.invoke('run-analysis', args),
   platform: process.platform,
 });
