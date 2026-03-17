@@ -58,7 +58,7 @@ function AnalysisPage(): JSX.Element {
                 </p>
               </div>
             )}
-            <ResultsDashboard result={result} />
+            {!hasEmptyTrends && <ResultsDashboard result={result} />}
           </>
         )}
 

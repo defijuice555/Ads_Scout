@@ -94,8 +94,8 @@ function HistoryPage(): JSX.Element {
                   <td className="px-4 py-3 text-gray-300">{entry.product}</td>
                   <td className="px-4 py-3 text-gray-400">{formatDate(entry.timestamp)}</td>
                   <td className="px-4 py-3 text-right font-mono text-indigo-400">
-                    {entry.conversion_analysis
-                      ? `${(entry.conversion_analysis.conversion_probability * 100).toFixed(1)}%`
+                    {entry.conversion_analysis?.conversion_probability != null
+                      ? `${entry.conversion_analysis.conversion_probability.toFixed(1)}%`
                       : '—'}
                   </td>
                   <td className="px-4 py-3 text-right">

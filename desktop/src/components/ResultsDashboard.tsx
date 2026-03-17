@@ -23,12 +23,12 @@ function exportToCSV(result: AnalysisResult): void {
   rows.push(['Metadata', 'Benefit', result.benefit]);
   rows.push(['Metadata', 'Region', result.region]);
   rows.push(['Metadata', 'Timestamp', result.timestamp]);
-  rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis.conversion_probability)]);
+  rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis?.conversion_probability ?? '')]);
   rows.push([]);
 
   // Dimension Scores
   rows.push(['Dimension Scores', 'Dimension', 'Score']);
-  for (const [dim, score] of Object.entries(result.conversion_analysis.dimension_scores)) {
+  for (const [dim, score] of Object.entries(result.conversion_analysis?.dimension_scores ?? {})) {
     rows.push(['Dimension Scores', dim, String(score)]);
   }
   rows.push([]);
@@ -49,7 +49,7 @@ function exportToCSV(result: AnalysisResult): void {
 
   // Drivers
   rows.push(['Drivers', 'Factor', 'Type', 'Impact', 'Description']);
-  for (const d of result.conversion_analysis.key_drivers) {
+  for (const d of result.conversion_analysis?.key_drivers ?? []) {
     rows.push(['Drivers', d.factor, d.type, String(d.impact), d.description]);
   }
   rows.push([]);
@@ -91,8 +91,29 @@ function barColor(value: number): string {
   return 'bg-red-500';
 }
 
+const EMPTY_CONVERSION: AnalysisResult['conversion_analysis'] = {
+  conversion_probability: 0,
+  dimension_scores: {},
+  key_drivers: [],
+  recommendations: [],
+};
+
+const EMPTY_SPECS: AnalysisResult['audience_specs'] = {
+  intent_layer: { type: '', value: '', platforms: {} },
+  demographic_layers: [],
+  exclusion_layer: { platforms: {} },
+  ethical_note: '',
+};
+
 function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
-  const { conversion_analysis, validated_trends, creative_frameworks, audience_specs } = result;
+  const conversion_analysis = result.conversion_analysis?.conversion_probability != null
+    ? result.conversion_analysis
+    : EMPTY_CONVERSION;
+  const validated_trends = result.validated_trends ?? {};
+  const creative_frameworks = result.creative_frameworks ?? [];
+  const audience_specs = result.audience_specs?.intent_layer
+    ? result.audience_specs
+    : EMPTY_SPECS;
 
   return (
     <div className="space-y-6">

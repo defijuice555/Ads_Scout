@@ -11,7 +11,7 @@ function getColor(value: number): string {
 }
 
 function ConversionGauge({ probability }: ConversionGaugeProps): JSX.Element {
-  const value = Math.round(probability * 100);
+  const value = Math.round(probability);
   const color = getColor(value);
   const data = [
     { name: 'value', value },
