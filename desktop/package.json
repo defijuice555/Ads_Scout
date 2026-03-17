@@ -14,6 +14,27 @@
     "react-router-dom": "^6.20.0",
     "recharts": "^2.10.0"
   },
+  "build": {
+    "appId": "com.adsscout.desktop",
+    "productName": "Ads Scout",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",

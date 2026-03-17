@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -100,19 +100,101 @@ ipcMain.handle('delete-history-entry', async (_event, timestamp: string) => {
   writeHistory(filtered);
 });
 
+function createMenu(win: BrowserWindow): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Analysis', accelerator: 'CmdOrCtrl+N', click: () => win.webContents.send('navigate', '/') },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Analysis', accelerator: 'CmdOrCtrl+1', click: () => win.webContents.send('navigate', '/') },
+        { label: 'History', accelerator: 'CmdOrCtrl+2', click: () => win.webContents.send('navigate', '/history') },
+        { type: 'separator' },
+        { role: 'reload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { role: 'resetZoom' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      role: 'help',
+      submenu: [
+        {
+          label: 'About Ads Scout',
+          click: () => {
+            const { dialog } = require('electron');
+            dialog.showMessageBox(win, {
+              type: 'info',
+              title: 'About Ads Scout',
+              message: 'Ads Scout — Ethical Ad Intelligence',
+              detail: 'Analyze advertising trends ethically. Never copies ads — analyzes generalized patterns for original creative inspiration.',
+            });
+          },
+        },
+      ],
+    },
+  ];
+
+  if (process.platform === 'darwin') {
+    template.unshift({
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    });
+  }
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 function createWindow(): void {
   const preloadPath = path.join(__dirname, 'preload.js');
 
   const win = new BrowserWindow({
+    title: 'Ads Scout — Ethical Ad Intelligence',
     width: 1200,
     height: 800,
+    minWidth: 900,
+    minHeight: 600,
     backgroundColor: '#0f172a',
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 15, y: 15 } }
+      : {}),
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  createMenu(win);
 
   if (app.isPackaged) {
     win.loadFile(path.join(__dirname, '../dist/index.html'));

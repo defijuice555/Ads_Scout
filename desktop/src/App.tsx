@@ -1,6 +1,19 @@
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import AnalysisPage from './pages/AnalysisPage';
 import HistoryPage from './pages/HistoryPage';
+
+function MenuNavigationListener(): null {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    window.electronAPI.onNavigate?.((path) => {
+      navigate(path);
+    });
+  }, [navigate]);
+
+  return null;
+}
 
 function NavBar(): JSX.Element {
   const location = useLocation();
@@ -28,6 +41,7 @@ function NavBar(): JSX.Element {
 function App(): JSX.Element {
   return (
     <BrowserRouter>
+      <MenuNavigationListener />
       <div className="min-h-screen bg-gray-950 text-white">
         <NavBar />
         <Routes>

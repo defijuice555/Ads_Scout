@@ -71,6 +71,7 @@ declare global {
       getHistory: () => Promise<AnalysisResult[]>;
       saveHistoryEntry: (entry: AnalysisResult) => Promise<void>;
       deleteHistoryEntry: (timestamp: string) => Promise<void>;
+      onNavigate: (callback: (path: string) => void) => void;
       platform: string;
     };
   }
