@@ -155,65 +155,42 @@ def fetch_meta_ads(keyword: str, region: str = "US") -> List[Dict]:
 
 
 def fetch_google_trends(keyword: str, region: str = "US") -> List[Dict]:
+    """Fetch trending suggestions via Google Suggest with trend-oriented prefixes."""
     cache_path = get_cache_path(keyword, "google_trends")
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    # Use the dailytrends or autocomplete endpoint as a more reliable fallback
-    url = f"{TREND_SOURCES['google_trends']['base_url']}hottrends/visualize/internal/data"
-    params = {"ed": datetime.now().strftime("%Y%m%d"), "geo": region, "cat": "", "q": keyword}
+    items: List[Dict] = []
+    prefixes = [f"trending {keyword}", f"popular {keyword}", f"{keyword} 2026", keyword]
+    url = "https://suggestqueries.google.com/complete/search"
 
-    resp = make_ethical_request(url, params=params, source="google_trends")
-
-    # Fallback: try the autocomplete/suggestions endpoint
-    if not resp:
-        url = f"https://trends.google.com/trends/api/autocomplete/{quote(keyword)}"
-        params = {"hl": "en-US", "tz": "-300"}
+    for prefix in prefixes:
+        params = {"client": "firefox", "q": prefix, "hl": "en", "gl": region.lower()}
         resp = make_ethical_request(url, params=params, source="google_trends")
+        if resp:
+            try:
+                data = resp.json()
+                if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+                    for suggestion in data[1][:3]:
+                        if isinstance(suggestion, str) and suggestion.lower() != prefix.lower():
+                            items.append({"text": suggestion, "type": "trending", "value": 0})
+            except Exception as e:
+                logger.warning(f"Google Suggest parse error for '{prefix}': {e}")
 
-    if not resp:
-        return []
+    # Deduplicate
+    seen: set = set()
+    unique: List[Dict] = []
+    for item in items:
+        key = item["text"].lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
 
-    try:
-        # Strip XSSI prefix if present
-        text = resp.text
-        if text.startswith(")]}'"):
-            text = text.split("\n", 1)[-1] if "\n" in text else text[4:]
-
-        data = json.loads(text)
-        queries: List[Dict] = []
-
-        # Handle various response shapes
-        if isinstance(data, dict):
-            # autocomplete response
-            if "default" in data and "topics" in data["default"]:
-                for topic in data["default"]["topics"][:MIN_ADS_PER_SOURCE]:
-                    title = topic.get("title", "")
-                    if title:
-                        queries.append({"text": title, "type": "related_topic", "value": 0})
-            # explore-style response
-            for key in ["trendingSearchesDays", "storySummaries"]:
-                if key in data:
-                    for day_data in data[key][:3]:
-                        for search in day_data.get("trendingSearches", [])[:5]:
-                            title = search.get("title", {}).get("query", "")
-                            if title:
-                                queries.append({"text": title, "type": "trending", "value": 0})
-        elif isinstance(data, list):
-            for item in data[:MIN_ADS_PER_SOURCE]:
-                if isinstance(item, str):
-                    queries.append({"text": item, "type": "suggestion", "value": 0})
-                elif isinstance(item, dict) and "query" in item:
-                    queries.append({"text": item["query"], "type": "query", "value": item.get("value", 0)})
-
-        result = queries[:MIN_ADS_PER_SOURCE]
-        save_to_cache(result, cache_path)
-        logger.info(f"Google Trends: Retrieved {len(result)} queries for '{keyword}'")
-        return result
-    except Exception as e:
-        logger.error(f"Google Trends parsing error: {e}")
-        return []
+    result = unique[:MIN_ADS_PER_SOURCE]
+    save_to_cache(result, cache_path)
+    logger.info(f"Google Trends (Suggest): Retrieved {len(result)} queries for '{keyword}'")
+    return result
 
 
 def fetch_answerthepublic(keyword: str, region: str = "us") -> List[Dict]:

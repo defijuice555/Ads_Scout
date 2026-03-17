@@ -24,6 +24,11 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "extraResources": [
+      { "from": "../main.py", "to": "python/main.py" },
+      { "from": "../ads_scout", "to": "python/ads_scout" },
+      { "from": "../requirements.txt", "to": "python/requirements.txt" }
+    ],
     "mac": {
       "target": "dmg",
       "category": "public.app-category.business"

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  checkPython: () => ipcRenderer.invoke('check-python'),
   runAnalysis: (args: Record<string, string>) => ipcRenderer.invoke('run-analysis', args),
   getHistory: () => ipcRenderer.invoke('get-history'),
   saveHistoryEntry: (entry: unknown) => ipcRenderer.invoke('save-history-entry', entry),

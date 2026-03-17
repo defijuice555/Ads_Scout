@@ -96,6 +96,7 @@ export interface AnalysisInput {
 declare global {
   interface Window {
     electronAPI: {
+      checkPython: () => Promise<{ ok: boolean; error?: string; detail?: string }>;
       runAnalysis: (args: AnalysisInput) => Promise<AnalysisResult>;
       getHistory: () => Promise<AnalysisResult[]>;
       saveHistoryEntry: (entry: AnalysisResult) => Promise<void>;

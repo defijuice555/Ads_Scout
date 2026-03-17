@@ -593,7 +593,7 @@ def update_trend_weights_from_performance(keyword: str, audience: str, period_da
 def save_insights(keyword: str, insights: Dict, product_name: str, audience: str, unique_benefit: str) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{OUTPUT_DIR}/insights_{keyword.replace(' ', '_')}_{timestamp}.csv"
+    filename = os.path.join(OUTPUT_DIR, f"insights_{keyword.replace(' ', '_')}_{timestamp}.csv")
 
     with open(filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

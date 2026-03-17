@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePythonAnalysis } from '../hooks/usePythonAnalysis';
 import type { AnalysisInput } from '../types';
 import InputForm from '../components/InputForm';
@@ -14,6 +14,7 @@ function AnalysisPage(): JSX.Element {
   const lastKeyword = useRef<string>('');
   const lastInput = useRef<AnalysisInput | null>(null);
   const mainRef = useRef<HTMLDivElement>(null);
+  const [pythonError, setPythonError] = useState<string | null>(null);
 
   const handleSubmit = (input: AnalysisInput): void => {
     lastKeyword.current = input.keyword;
@@ -26,6 +27,17 @@ function AnalysisPage(): JSX.Element {
       runAnalysis(lastInput.current);
     }
   };
+
+  useEffect(() => {
+    window.electronAPI.checkPython().then((res) => {
+      if (!res.ok) {
+        const msg = res.error === 'missing-requests'
+          ? 'Python found but "requests" package is missing. Run: pip3 install requests'
+          : 'Python 3 not found. Please install Python 3 and ensure python3 is on your PATH.';
+        setPythonError(msg);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     if (result && result.timestamp !== savedTimestamp.current) {
@@ -45,6 +57,7 @@ function AnalysisPage(): JSX.Element {
       </div>
       {/* Main area */}
       <div ref={mainRef} className="flex-1 overflow-y-auto p-6">
+        {pythonError && <ErrorBanner message={pythonError} />}
         {error && <ErrorBanner message={error} onRetry={handleRetry} />}
 
         {loading && <LoadingSkeleton keyword={lastKeyword.current || 'keyword'} />}
@@ -58,6 +71,12 @@ function AnalysisPage(): JSX.Element {
                   The analysis completed but no validated trends were detected. Try broadening
                   your keyword or checking a different region.
                 </p>
+                <button
+                  onClick={handleRetry}
+                  className="mt-3 rounded-lg bg-white/10 px-4 py-1.5 text-sm font-medium hover:bg-white/20 transition-colors"
+                >
+                  Try Again
+                </button>
               </div>
             )}
             {!hasEmptyTrends && <ResultsDashboard result={result} />}

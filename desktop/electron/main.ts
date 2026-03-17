@@ -6,6 +6,33 @@ import os from 'os';
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL ?? 'http://localhost:5173';
 
+// Python environment check
+ipcMain.handle('check-python', async () => {
+  return new Promise((resolve) => {
+    const proc = spawn('python3', ['-c', 'import requests; print("ok")'], {
+      timeout: 5000,
+    });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    proc.on('close', (code) => {
+      if (code === 0 && stdout.trim() === 'ok') {
+        resolve({ ok: true });
+      } else {
+        resolve({
+          ok: false,
+          error: stderr.includes('No module named') ? 'missing-requests' : 'python-not-found',
+          detail: stderr,
+        });
+      }
+    });
+    proc.on('error', () => {
+      resolve({ ok: false, error: 'python-not-found' });
+    });
+  });
+});
+
 // Register IPC handlers at top level (before app.whenReady)
 ipcMain.handle('run-analysis', async (_event, args: {
   keyword: string;
@@ -14,8 +41,12 @@ ipcMain.handle('run-analysis', async (_event, args: {
   benefit: string;
   region: string;
 }) => {
-  const scriptPath = path.resolve(__dirname, '../../main.py');
-  const cwd = path.resolve(__dirname, '../..');
+  const scriptPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'python', 'main.py')
+    : path.resolve(__dirname, '../../main.py');
+  const cwd = app.isPackaged
+    ? path.join(process.resourcesPath, 'python')
+    : path.resolve(__dirname, '../..');
 
   const spawnArgs = [
     scriptPath,

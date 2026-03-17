@@ -15,7 +15,7 @@ MIN_ADS_PER_SOURCE = 5
 REQUEST_DELAY = 1.5
 MAX_RETRIES = 3
 BACKOFF_FACTOR = 2
-OUTPUT_DIR = "ethical_ad_insights"
+OUTPUT_DIR = os.path.join(os.path.expanduser("~"), ".ads-scout", "insights")
 CACHE_DIR = os.path.join(OUTPUT_DIR, "cache")
 LOG_LEVEL = logging.INFO
 TREND_HISTORY_DAYS = 30
@@ -26,7 +26,7 @@ TREND_HISTORY_DAYS = 30
 
 TREND_SOURCES = {
     "meta": {"enabled": True, "weight": 0.3, "base_url": "https://www.facebook.com/ads/library/"},
-    "google_trends": {"enabled": True, "weight": 0.25, "base_url": "https://trends.google.com/trends/api/"},
+    "google_trends": {"enabled": True, "weight": 0.25, "base_url": "https://suggestqueries.google.com/complete/search"},
     "answerthepublic": {"enabled": True, "weight": 0.2, "base_url": "https://answerthepublic.com/api/"},
     "tiktok_creative_center": {"enabled": True, "weight": 0.15, "base_url": "https://ads.tiktok.com/creative_radar/api/"},
     "pinterest_trends": {"enabled": True, "weight": 0.1, "base_url": "https://trends.pinterest.com/"},
