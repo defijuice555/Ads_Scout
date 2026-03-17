@@ -1,5 +1,6 @@
 import { usePythonAnalysis } from '../hooks/usePythonAnalysis';
 import InputForm from '../components/InputForm';
+import ResultsDashboard from '../components/ResultsDashboard';
 
 function AnalysisPage(): JSX.Element {
   const { result, loading, error, runAnalysis } = usePythonAnalysis();
@@ -18,9 +19,7 @@ function AnalysisPage(): JSX.Element {
           </div>
         )}
         {loading && <p className="text-gray-400">Analyzing...</p>}
-        {result && (
-          <pre className="text-xs text-gray-300">{JSON.stringify(result, null, 2)}</pre>
-        )}
+        {result && <ResultsDashboard result={result} />}
         {!result && !loading && !error && (
           <div className="flex items-center justify-center h-full text-gray-500">
             Enter your product details and run an analysis
