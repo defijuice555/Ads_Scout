@@ -103,7 +103,17 @@ FORMAT_PATTERNS = {
     "comparative_language": r"(vs|versus|compared to|better than|unlike|instead of|rather than|alternative|superior|inferior)",
 }
 
-TREND_PATTERNS = {**EMOTION_FRAMEWORK, **FORMAT_PATTERNS}
+# Commercial intent patterns — match common search suggestion phrases
+COMMERCIAL_PATTERNS = {
+    "purchase_intent": r"(buy|shop|order|price|cost|cheap|affordable|deal|discount|sale|coupon|best|top|review)",
+    "product_research": r"(how to|what is|which|where to|when to|can you|should i|worth|recommend)",
+    "product_attributes": r"(size|color|weight|material|thick|thin|large|small|portable|foldable|durable|eco|organic|natural)",
+    "use_case": r"(for beginners|for kids|for home|for gym|for travel|for exercise|for workout|at home|outdoor|indoor)",
+    "brand_comparison": r"(amazon|walmart|target|nike|lululemon|manduka|gaiam|brand|store)",
+    "accessory_interest": r"(bag|strap|towel|block|bolster|wheel|mat\s*cleaner|carrier|holder|rack|stand)",
+}
+
+TREND_PATTERNS = {**EMOTION_FRAMEWORK, **FORMAT_PATTERNS, **COMMERCIAL_PATTERNS}
 
 # ======================
 # CONVERSION MODEL

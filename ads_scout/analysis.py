@@ -442,7 +442,7 @@ def save_insights(keyword: str, insights: Dict, product_name: str, audience: str
                 _get_trend_explanation(trend_name),
             ])
 
-    print(f"Ethical insights saved to {filename}")
+    logger.info(f"Ethical insights saved to {filename}")
     return filename
 
 

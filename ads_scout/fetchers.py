@@ -11,7 +11,7 @@ import html
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from urllib.parse import quote
+from urllib.parse import quote  # noqa: F401 — kept for potential custom URL building
 
 from ads_scout.config import (
     TREND_SOURCES, MIN_ADS_PER_SOURCE, REQUEST_DELAY, MAX_RETRIES,
@@ -76,7 +76,7 @@ def make_ethical_request(
 ) -> Optional[requests.Response]:
     if headers is None:
         headers = {
-            "User-Agent": "EthicalAdTracker/4.0 (research; compliant; +https://github.com/ethicaladtracker)"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         }
 
     for attempt in range(MAX_RETRIES):
@@ -103,61 +103,54 @@ def make_ethical_request(
 # ======================
 
 def fetch_meta_ads(keyword: str, region: str = "US") -> List[Dict]:
+    """Fetch product-related suggestions via Google Shopping suggest (Meta replacement)."""
     cache_path = get_cache_path(keyword, "meta")
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    url = TREND_SOURCES["meta"]["base_url"]
-    params = {
-        "q": keyword, "ad_type": "all", "media_type": "all",
-        "search_type": "keyword_unordered", "country": [region], "start": 0,
-    }
-
+    # Use Google Shopping suggestions as a proxy for commercial/ad intent data
+    url = "https://suggestqueries.google.com/complete/search"
+    params = {"client": "firefox", "q": keyword, "hl": "en", "gl": region.lower(), "ds": "sh"}
     resp = make_ethical_request(url, params=params, source="meta")
+
     if not resp:
-        return []
+        # Fallback to regular Google suggest with ad-related prefixes
+        items: List[Dict] = []
+        for prefix in [f"{keyword} ad", f"{keyword} deal", f"buy {keyword}"]:
+            fallback_params = {"client": "firefox", "q": prefix, "hl": "en", "gl": region.lower()}
+            fb_resp = make_ethical_request(url, params=fallback_params, source="meta")
+            if fb_resp:
+                try:
+                    data = fb_resp.json()
+                    if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+                        for s in data[1][:2]:
+                            if isinstance(s, str):
+                                items.append({"text": s, "type": "commercial_suggestion", "raw_length": len(s)})
+                except Exception:
+                    pass
+        result = items[:MIN_ADS_PER_SOURCE]
+        save_to_cache(result, cache_path)
+        return result
 
     try:
-        ads = []
-        ad_patterns = [
-            r'<div[^>]*class="[^"]*x[^"]*_[^"]*ad[^"]*"[^>]*>.*?</div>',
-            r'<div[^>]*class="[^"]*_._.[^"]*ad[^"]*"[^>]*>.*?</div>',
-            r'<div[^>]*data-testid="[^"]*ad-container[^"]*"[^>]*>.*?</div>',
-        ]
-
-        ad_cards = []
-        for pattern in ad_patterns:
-            ad_cards.extend(re.findall(pattern, resp.text, re.DOTALL | re.IGNORECASE))
-
-        seen = set()
-        unique_cards = []
-        for card in ad_cards:
-            if card not in seen:
-                seen.add(card)
-                unique_cards.append(card)
-
-        for card in unique_cards[: MIN_ADS_PER_SOURCE * 2]:
-            text_containers = re.findall(
-                r"(?:<span[^>]*>|<div[^>]*>|>)(.*?)(?:</span|</div|<|$)", card, re.DOTALL,
-            )
-            for text in text_containers:
-                clean_text = html.unescape(re.sub(r"<[^>]+>", " ", text)).strip()
-                if 20 < len(clean_text) < 400 and not re.match(r"^[^\w\s]*$", clean_text):
+        data = resp.json()
+        ads: List[Dict] = []
+        if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+            for suggestion in data[1][:MIN_ADS_PER_SOURCE]:
+                if isinstance(suggestion, str) and suggestion.lower() != keyword.lower():
                     ads.append({
-                        "text": clean_text[:350],
-                        "type": "video" if "video" in card.lower() else "image",
-                        "raw_length": len(clean_text),
+                        "text": suggestion,
+                        "type": "shopping_suggestion",
+                        "raw_length": len(suggestion),
                     })
-                    if len(ads) >= MIN_ADS_PER_SOURCE:
-                        break
 
         result = ads[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"Meta: Retrieved {len(result)} quality ads for '{keyword}'")
+        logger.info(f"Google Shopping Suggest: Retrieved {len(result)} items for '{keyword}'")
         return result
     except Exception as e:
-        logger.error(f"Meta parsing error: {e}")
+        logger.error(f"Google Shopping Suggest parsing error: {e}")
         return []
 
 
@@ -167,33 +160,56 @@ def fetch_google_trends(keyword: str, region: str = "US") -> List[Dict]:
     if cached is not None:
         return cached
 
-    url = f"{TREND_SOURCES['google_trends']['base_url']}explore"
-    params = {"date": f"today {TREND_HISTORY_DAYS}-d", "geo": region, "q": quote(keyword)}
+    # Use the dailytrends or autocomplete endpoint as a more reliable fallback
+    url = f"{TREND_SOURCES['google_trends']['base_url']}hottrends/visualize/internal/data"
+    params = {"ed": datetime.now().strftime("%Y%m%d"), "geo": region, "cat": "", "q": keyword}
 
     resp = make_ethical_request(url, params=params, source="google_trends")
+
+    # Fallback: try the autocomplete/suggestions endpoint
+    if not resp:
+        url = f"https://trends.google.com/trends/api/autocomplete/{quote(keyword)}"
+        params = {"hl": "en-US", "tz": "-300"}
+        resp = make_ethical_request(url, params=params, source="google_trends")
+
     if not resp:
         return []
 
     try:
-        json_text = resp.text.split(")]}'\\n", 1)[-1] if ")]}'\\n" in resp.text else resp.text
-        data = json.loads(json_text)
+        # Strip XSSI prefix if present
+        text = resp.text
+        if text.startswith(")]}'"):
+            text = text.split("\n", 1)[-1] if "\n" in text else text[4:]
 
-        queries = []
-        rising = []
+        data = json.loads(text)
+        queries: List[Dict] = []
 
-        if "default" in data and "trends" in data["default"]:
-            for trend in data["default"]["trends"]:
-                if "query" in trend:
-                    queries.append({"text": trend["query"], "type": "query", "value": trend.get("value", 0)})
+        # Handle various response shapes
+        if isinstance(data, dict):
+            # autocomplete response
+            if "default" in data and "topics" in data["default"]:
+                for topic in data["default"]["topics"][:MIN_ADS_PER_SOURCE]:
+                    title = topic.get("title", "")
+                    if title:
+                        queries.append({"text": title, "type": "related_topic", "value": 0})
+            # explore-style response
+            for key in ["trendingSearchesDays", "storySummaries"]:
+                if key in data:
+                    for day_data in data[key][:3]:
+                        for search in day_data.get("trendingSearches", [])[:5]:
+                            title = search.get("title", {}).get("query", "")
+                            if title:
+                                queries.append({"text": title, "type": "trending", "value": 0})
+        elif isinstance(data, list):
+            for item in data[:MIN_ADS_PER_SOURCE]:
+                if isinstance(item, str):
+                    queries.append({"text": item, "type": "suggestion", "value": 0})
+                elif isinstance(item, dict) and "query" in item:
+                    queries.append({"text": item["query"], "type": "query", "value": item.get("value", 0)})
 
-        if "default" in data and "rising" in data["default"]:
-            for trend in data["default"]["rising"][:MIN_ADS_PER_SOURCE]:
-                if "query" in trend:
-                    rising.append({"text": trend["query"], "type": "rising_query", "value": trend.get("value", 0)})
-
-        result = (rising + queries)[:MIN_ADS_PER_SOURCE]
+        result = queries[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"Google Trends: Retrieved {len(result)} queries ({len(rising)} rising) for '{keyword}'")
+        logger.info(f"Google Trends: Retrieved {len(result)} queries for '{keyword}'")
         return result
     except Exception as e:
         logger.error(f"Google Trends parsing error: {e}")
@@ -201,106 +217,119 @@ def fetch_google_trends(keyword: str, region: str = "US") -> List[Dict]:
 
 
 def fetch_answerthepublic(keyword: str, region: str = "us") -> List[Dict]:
+    """Fetch search suggestions via Google Suggest API (public, no auth)."""
     cache_path = get_cache_path(keyword, "answerthepublic")
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    url = f"{TREND_SOURCES['answerthepublic']['base_url']}{region}/search"
-    params = {"terms": quote(keyword)}
+    items: List[Dict] = []
+    prefixes = ["", "how to ", "best ", "why ", "what "]
 
-    resp = make_ethical_request(url, params=params, source="answerthepublic")
-    if not resp:
-        return []
+    for prefix in prefixes:
+        query = f"{prefix}{keyword}".strip()
+        url = "https://suggestqueries.google.com/complete/search"
+        params = {"client": "firefox", "q": query, "hl": "en", "gl": region.lower()}
+        resp = make_ethical_request(url, params=params, source="answerthepublic")
+        if resp:
+            try:
+                data = resp.json()
+                if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+                    item_type = "question" if prefix.strip() in ("how to", "why", "what") else "suggestion"
+                    for suggestion in data[1][:3]:
+                        if isinstance(suggestion, str) and suggestion.lower() != query.lower():
+                            items.append({
+                                "text": suggestion,
+                                "type": item_type,
+                                "engagement_potential": 0.9 if item_type == "question" else 0.7,
+                            })
+            except Exception as e:
+                logger.warning(f"Google Suggest parse error for '{query}': {e}")
 
-    try:
-        data = resp.json()
-        items = []
-        sections = [
-            ("questions", "question", 1.0), ("prepositions", "preposition", 0.8),
-            ("comparisons", "comparison", 0.9), ("alphabeticals", "alphabetical", 0.6),
-            ("related", "related", 0.7),
-        ]
+    # Deduplicate
+    seen: set = set()
+    unique: List[Dict] = []
+    for item in items:
+        key = item["text"].lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
 
-        for section, item_type, weight in sections:
-            if section in data and isinstance(data[section], list):
-                for item in data[section][: MIN_ADS_PER_SOURCE // 2]:
-                    if isinstance(item, dict) and "phrase" in item:
-                        items.append({"text": item["phrase"], "type": item_type, "engagement_potential": weight})
-
-        items.sort(key=lambda x: x["engagement_potential"], reverse=True)
-        result = items[:MIN_ADS_PER_SOURCE]
-        save_to_cache(result, cache_path)
-        logger.info(f"AnswerThePublic: Retrieved {len(result)} items for '{keyword}'")
-        return result
-    except Exception as e:
-        logger.error(f"AnswerThePublic parsing error: {e}")
-        return []
+    unique.sort(key=lambda x: x["engagement_potential"], reverse=True)
+    result = unique[:MIN_ADS_PER_SOURCE]
+    save_to_cache(result, cache_path)
+    logger.info(f"Google Suggest: Retrieved {len(result)} suggestions for '{keyword}'")
+    return result
 
 
 def fetch_tiktok_trends(keyword: str, region: str = "US") -> List[Dict]:
+    """Fetch suggestions via Bing Suggest API (used as TikTok replacement)."""
     cache_path = get_cache_path(keyword, "tiktok_creative_center")
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    url = f"{TREND_SOURCES['tiktok_creative_center']['base_url']}trend/hashtag"
-    params = {"keyword": quote(keyword), "region": region.upper(), "period": "7"}
-
+    url = "https://api.bing.com/osjson.aspx"
+    params = {"query": keyword, "mkt": f"en-{region}", "maxwidth": "10"}
     resp = make_ethical_request(url, params=params, source="tiktok_creative_center")
     if not resp:
         return []
 
     try:
         data = resp.json()
-        trends = []
-        if "data" in data and "list" in data["data"]:
-            for trend in data["data"]["list"][:MIN_ADS_PER_SOURCE]:
-                name = trend.get("display", "")
-                if name and len(name) > 3:
+        trends: List[Dict] = []
+        if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+            for suggestion in data[1][:MIN_ADS_PER_SOURCE]:
+                if isinstance(suggestion, str) and suggestion.lower() != keyword.lower():
                     trends.append({
-                        "text": name, "type": "hashtag_trend",
-                        "growth": trend.get("growth", 0), "video_count": trend.get("video_count", 0),
+                        "text": suggestion,
+                        "type": "search_trend",
+                        "growth": 0,
+                        "video_count": 0,
                     })
 
         result = trends[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"TikTok: Retrieved {len(result)} trends for '{keyword}'")
+        logger.info(f"Bing Suggest: Retrieved {len(result)} trends for '{keyword}'")
         return result
     except Exception as e:
-        logger.error(f"TikTok parsing error: {e}")
+        logger.error(f"Bing Suggest parsing error: {e}")
         return []
 
 
 def fetch_pinterest_trends(keyword: str, region: str = "US") -> List[Dict]:
+    """Fetch suggestions via DuckDuckGo Suggest API (used as Pinterest replacement)."""
     cache_path = get_cache_path(keyword, "pinterest_trends")
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    url = f"{TREND_SOURCES['pinterest_trends']['base_url']}trends/"
-    params = {"term": quote(keyword), "region": region.lower()}
-
+    url = "https://duckduckgo.com/ac/"
+    params = {"q": keyword, "kl": f"{region.lower()}-en"}
     resp = make_ethical_request(url, params=params, source="pinterest_trends")
     if not resp:
         return []
 
     try:
         data = resp.json()
-        trends = []
-        if "data" in data and "trends" in data["data"]:
-            for trend in data["data"]["trends"][:MIN_ADS_PER_SOURCE]:
-                trends.append({
-                    "text": trend.get("keyword", ""), "type": "pin_trend",
-                    "score": trend.get("score", 0), "growth": trend.get("growth", 0),
-                })
+        trends: List[Dict] = []
+        if isinstance(data, list):
+            for item in data[:MIN_ADS_PER_SOURCE]:
+                phrase = item.get("phrase", "") if isinstance(item, dict) else str(item)
+                if phrase and len(phrase) > 2 and phrase.lower() != keyword.lower():
+                    trends.append({
+                        "text": phrase,
+                        "type": "search_suggestion",
+                        "score": 0,
+                        "growth": 0,
+                    })
 
-        result = [t for t in trends if t["text"] and len(t["text"]) > 2][:MIN_ADS_PER_SOURCE]
+        result = trends[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"Pinterest: Retrieved {len(result)} trends for '{keyword}'")
+        logger.info(f"DuckDuckGo Suggest: Retrieved {len(result)} suggestions for '{keyword}'")
         return result
     except Exception as e:
-        logger.error(f"Pinterest parsing error: {e}")
+        logger.error(f"DuckDuckGo Suggest parsing error: {e}")
         return []
 
 

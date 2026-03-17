@@ -8,7 +8,11 @@ import argparse
 import json as json_module
 import logging
 import os
+import warnings
 from datetime import datetime
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=".*urllib3.*")
 
 from ads_scout.config import TREND_SOURCES, MIN_SOURCES_FOR_TREND, TREND_HISTORY_DAYS, OUTPUT_DIR, LOG_LEVEL
 from ads_scout.fetchers import setup_directories, FETCHER_MAP
