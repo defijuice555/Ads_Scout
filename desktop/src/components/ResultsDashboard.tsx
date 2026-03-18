@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import type { AnalysisResult, CreativeBrief } from '../types';
+import { useState, useEffect, useCallback } from 'react';
+import type { AnalysisResult, CreativeBrief, AgentStrategy } from '../types';
 import MarketSnapshot from './MarketSnapshot';
 import MessagingDiagnostic from './MessagingDiagnostic';
 import TrendTable from './TrendTable';
 import CreativeFrameworks from './CreativeFrameworks';
 import AudienceSpecs from './AudienceSpecs';
+import AiStrategies from './AiStrategies';
 
 function escapeCsvField(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
@@ -17,10 +18,14 @@ function isNewBriefFormat(fw: unknown): fw is CreativeBrief {
   return typeof fw === 'object' && fw !== null && 'angle' in fw;
 }
 
-function exportToCSV(result: AnalysisResult): void {
+function exportToCSV(
+  result: AnalysisResult,
+  strategies: AgentStrategy[] = [],
+  selectedWinner: number | null = null,
+): void {
   const rows: string[][] = [];
 
-  // Metadata
+  // --- Section 1: Metadata ---
   rows.push(['Section', 'Field', 'Value']);
   rows.push(['Metadata', 'Keyword', result.keyword]);
   rows.push(['Metadata', 'Product', result.product]);
@@ -31,7 +36,6 @@ function exportToCSV(result: AnalysisResult): void {
   if (result.city) rows.push(['Metadata', 'City', result.city]);
   rows.push(['Metadata', 'Timestamp', result.timestamp]);
 
-  // Market Summary (if present)
   if (result.market_summary) {
     rows.push(['Metadata', 'Opportunity Score', String(result.market_summary.opportunity_score)]);
     rows.push(['Metadata', 'Summary', result.market_summary.summary_text]);
@@ -42,11 +46,31 @@ function exportToCSV(result: AnalysisResult): void {
   rows.push(['Metadata', 'Conversion Probability', String(result.conversion_analysis?.conversion_probability ?? '')]);
   rows.push([]);
 
-  // Trends
-  rows.push(['Trends', 'Trend', 'Count', 'Weighted Score', 'Confidence', 'Sources']);
+  // --- Section 2: Dimension Scores ---
+  const dims = result.conversion_analysis?.dimension_scores ?? {};
+  if (Object.keys(dims).length > 0) {
+    rows.push(['Dimension Scores', 'Dimension', 'Score']);
+    for (const [dim, score] of Object.entries(dims)) {
+      rows.push(['Dimension Scores', dim.replace(/_/g, ' '), String(typeof score === 'number' ? score.toFixed(3) : score)]);
+    }
+    rows.push([]);
+  }
+
+  // --- Section 3: Key Drivers ---
+  const drivers = result.conversion_analysis?.key_drivers ?? [];
+  if (drivers.length > 0) {
+    rows.push(['Key Drivers', 'Factor', 'Type', 'Impact', 'Description']);
+    for (const d of drivers) {
+      rows.push(['Key Drivers', d.factor, d.type, String(d.impact.toFixed(3)), d.description]);
+    }
+    rows.push([]);
+  }
+
+  // --- Section 4: Validated Trends ---
+  rows.push(['Market Signals', 'Trend', 'Count', 'Weighted Score', 'Confidence', 'Sources']);
   for (const [trend, data] of Object.entries(result.validated_trends)) {
     rows.push([
-      'Trends',
+      'Market Signals',
       trend,
       String(data.count),
       String(data.weighted_score),
@@ -56,21 +80,69 @@ function exportToCSV(result: AnalysisResult): void {
   }
   rows.push([]);
 
-  // Creative Briefs / Frameworks
+  // --- Section 5: Creative Briefs ---
   const frameworks = result.creative_frameworks ?? [];
   if (frameworks.length > 0 && isNewBriefFormat(frameworks[0])) {
     rows.push(['Creative Briefs', 'Angle', 'Headline', 'Body Direction', 'CTA', 'Format', 'Platform', 'Priority', 'Why']);
     for (const f of frameworks as CreativeBrief[]) {
       rows.push(['Creative Briefs', f.angle, f.headline, f.body_direction, f.cta, f.format, f.platform, f.priority, f.why]);
     }
-  } else {
+  } else if (frameworks.length > 0) {
     rows.push(['Creative Frameworks', 'Name', 'Hook', 'CTA', 'Format', 'Why', 'Priority']);
     for (const f of frameworks as Array<{ name: string; hook: string; cta: string; format: string; why: string; test_priority: string }>) {
       rows.push(['Creative Frameworks', f.name, f.hook, f.cta, f.format, f.why, f.test_priority]);
     }
   }
+  rows.push([]);
 
-  const csvContent = rows.map((row) => row.map((cell) => escapeCsvField(cell)).join(',')).join('\n');
+  // --- Section 6: AI Ad Strategies (all 3 agents) ---
+  const validStrategies = strategies.filter((s) => !s.error);
+  if (validStrategies.length > 0) {
+    rows.push(['AI Strategies', 'Agent', 'Emotional Angle', 'Is Winner', 'Headline', 'Body Direction', 'CTA', 'Emotional Hook', 'Platform Recommendation', 'Why This Works']);
+    strategies.forEach((s, i) => {
+      if (s.error) return;
+      rows.push([
+        'AI Strategies',
+        s.agent_name,
+        s.emotional_angle.replace(/_/g, ' '),
+        selectedWinner === i ? 'YES' : 'NO',
+        s.headline,
+        s.body_direction,
+        s.cta,
+        s.emotional_hook,
+        s.platform_recommendation,
+        s.why_this_works,
+      ]);
+    });
+    rows.push([]);
+  }
+
+  // --- Section 7: Recommendations ---
+  const recs = result.conversion_analysis?.recommendations ?? [];
+  if (recs.length > 0) {
+    rows.push(['Recommendations', 'Priority', 'Action']);
+    recs.forEach((rec, i) => {
+      rows.push(['Recommendations', String(i + 1), rec]);
+    });
+    rows.push([]);
+  }
+
+  // --- Section 8: Audience Specs ---
+  const specs = result.audience_specs;
+  if (specs?.intent_layer?.value) {
+    rows.push(['Audience Specs', 'Layer', 'Detail']);
+    rows.push(['Audience Specs', 'Intent', `${specs.intent_layer.type}: ${specs.intent_layer.value}`]);
+    for (const dl of specs.demographic_layers ?? []) {
+      rows.push(['Audience Specs', 'Demographic', `${dl.trend} (${dl.platform}) — ${dl.targeting_options.join(', ')} [weight: ${dl.weight}]`]);
+    }
+    const exclusions = specs.exclusion_layer?.platforms ?? {};
+    for (const [platform, items] of Object.entries(exclusions)) {
+      rows.push(['Audience Specs', `Exclusion (${platform})`, (items as string[]).join(', ')]);
+    }
+    rows.push(['Audience Specs', 'Ethical Note', specs.ethical_note]);
+  }
+
+  const csvContent = rows.map((row) => row.map((cell) => escapeCsvField(String(cell ?? ''))).join(',')).join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const date = new Date().toISOString().slice(0, 10);
@@ -103,6 +175,40 @@ const EMPTY_SPECS: AnalysisResult['audience_specs'] = {
 
 function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
   const [trendsOpen, setTrendsOpen] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [aiStrategies, setAiStrategies] = useState<AgentStrategy[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiWinnerIdx, setAiWinnerIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    window.electronAPI.getApiKey().then(({ key }) => setHasApiKey(!!key));
+  }, []);
+
+  // Reset AI strategies when result changes
+  useEffect(() => {
+    setAiStrategies([]);
+    setAiError(null);
+    setAiWinnerIdx(null);
+  }, [result.timestamp]);
+
+  const handleGenerateStrategies = useCallback(async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setAiStrategies([]);
+    try {
+      const res = await window.electronAPI.runAiStrategies(result);
+      if (res.error) {
+        setAiError(res.error);
+      } else if (res.strategies) {
+        setAiStrategies(res.strategies);
+      }
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Failed to generate strategies');
+    } finally {
+      setAiLoading(false);
+    }
+  }, [result]);
 
   const conversion_analysis = result.conversion_analysis?.conversion_probability != null
     ? result.conversion_analysis
@@ -145,7 +251,18 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
       {/* 3. Creative Briefs (main content) */}
       <CreativeFrameworks frameworks={creative_frameworks} />
 
-      {/* 3. Market Signals (collapsible) */}
+      {/* 4. AI Strategies (optional — requires API key) */}
+      <AiStrategies
+        strategies={aiStrategies}
+        loading={aiLoading}
+        error={aiError}
+        onGenerate={handleGenerateStrategies}
+        hasApiKey={hasApiKey}
+        selectedWinner={aiWinnerIdx}
+        onSelectWinner={setAiWinnerIdx}
+      />
+
+      {/* 5. Market Signals (collapsible) */}
       <div>
         <button
           onClick={() => setTrendsOpen(!trendsOpen)}
@@ -204,7 +321,7 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
       {/* Export */}
       <div className="flex justify-end">
         <button
-          onClick={() => exportToCSV(result)}
+          onClick={() => exportToCSV(result, aiStrategies, aiWinnerIdx)}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

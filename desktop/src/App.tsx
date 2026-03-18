@@ -21,8 +21,8 @@ function NavBar(): JSX.Element {
 
   return (
     <nav
-      className="flex items-center gap-6 border-b border-gray-800 px-6 pb-3 pt-8"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="flex items-center gap-6 border-b border-gray-800 pr-6 pb-3 pt-8"
+      style={{ WebkitAppRegion: 'drag', paddingLeft: window.electronAPI?.platform === 'darwin' ? '80px' : '16px' } as React.CSSProperties}
     >
       <span className="text-lg font-bold text-indigo-400">Ads Scout</span>
       <Link

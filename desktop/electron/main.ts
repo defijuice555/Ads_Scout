@@ -140,6 +140,120 @@ ipcMain.handle('delete-history-entry', async (_event, timestamp: string) => {
   writeHistory(filtered);
 });
 
+// API key management
+function getConfigPath(): string {
+  const dir = path.join(os.homedir(), '.ads-scout');
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return path.join(dir, 'config.json');
+}
+
+function readConfig(): Record<string, unknown> {
+  const configPath = getConfigPath();
+  if (!fs.existsSync(configPath)) return {};
+  try { return JSON.parse(fs.readFileSync(configPath, 'utf-8')); } catch { return {}; }
+}
+
+function writeConfig(data: Record<string, unknown>): void {
+  fs.writeFileSync(getConfigPath(), JSON.stringify(data, null, 2));
+}
+
+ipcMain.handle('get-ai-config', async () => {
+  const data = readConfig();
+  const provider = (data.llm_provider as string) || 'anthropic';
+  const keyMap: Record<string, string> = {
+    anthropic: 'anthropic_api_key',
+    openai: 'openai_api_key',
+    minimax: 'minimax_api_key',
+  };
+  return {
+    provider,
+    hasKey: !!(data[keyMap[provider]] as string),
+    anthropicKey: !!(data.anthropic_api_key as string),
+    openaiKey: !!(data.openai_api_key as string),
+    minimaxKey: !!(data.minimax_api_key as string),
+  };
+});
+
+ipcMain.handle('save-ai-config', async (_event, config: {
+  provider?: string;
+  anthropic_api_key?: string;
+  openai_api_key?: string;
+  minimax_api_key?: string;
+}) => {
+  const data = readConfig();
+  if (config.provider) data.llm_provider = config.provider;
+  if (config.anthropic_api_key !== undefined) data.anthropic_api_key = config.anthropic_api_key;
+  if (config.openai_api_key !== undefined) data.openai_api_key = config.openai_api_key;
+  if (config.minimax_api_key !== undefined) data.minimax_api_key = config.minimax_api_key;
+  writeConfig(data);
+});
+
+// Legacy compat
+ipcMain.handle('get-api-key', async () => {
+  const data = readConfig();
+  const provider = (data.llm_provider as string) || 'anthropic';
+  const keyMap: Record<string, string> = { anthropic: 'anthropic_api_key', openai: 'openai_api_key', minimax: 'minimax_api_key' };
+  return { key: (data[keyMap[provider]] as string) || null, provider };
+});
+
+ipcMain.handle('save-api-key', async (_event, key: string) => {
+  const data = readConfig();
+  const provider = (data.llm_provider as string) || 'anthropic';
+  const keyMap: Record<string, string> = { anthropic: 'anthropic_api_key', openai: 'openai_api_key', minimax: 'minimax_api_key' };
+  data[keyMap[provider]] = key;
+  writeConfig(data);
+});
+
+// AI Strategy generation (3 agents)
+ipcMain.handle('run-ai-strategies', async (_event, analysisResult: unknown) => {
+  const scriptPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'python', 'agents_runner.py')
+    : path.resolve(__dirname, '../../agents_runner.py');
+  const cwd = app.isPackaged
+    ? path.join(process.resourcesPath, 'python')
+    : path.resolve(__dirname, '../..');
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn('python3', [scriptPath], { cwd });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    // Send analysis JSON via stdin
+    proc.stdin.write(JSON.stringify(analysisResult));
+    proc.stdin.end();
+
+    proc.on('close', (code: number | null) => {
+      if (code === 0) {
+        try {
+          resolve(JSON.parse(stdout));
+        } catch {
+          reject(new Error(`Failed to parse agent output: ${stdout.slice(0, 500)}`));
+        }
+      } else {
+        // Exit code 1 with valid JSON means a controlled error (e.g., no API key)
+        try {
+          const errResult = JSON.parse(stdout);
+          if (errResult.error) {
+            resolve(errResult);
+            return;
+          }
+        } catch { /* not JSON */ }
+        reject(new Error(stderr || `Agent process exited with code ${code}`));
+      }
+    });
+
+    proc.on('error', (err: NodeJS.ErrnoException) => {
+      reject(new Error(`Failed to start agent process: ${err.message}`));
+    });
+  });
+});
+
 function createMenu(win: BrowserWindow): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {

@@ -97,6 +97,18 @@ export interface AnalysisInput {
   city?: string;
 }
 
+export interface AgentStrategy {
+  agent_name: string;
+  emotional_angle: string;
+  headline: string;
+  body_direction: string;
+  cta: string;
+  emotional_hook: string;
+  platform_recommendation: string;
+  why_this_works: string;
+  error?: string;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -106,6 +118,11 @@ declare global {
       saveHistoryEntry: (entry: AnalysisResult) => Promise<void>;
       deleteHistoryEntry: (timestamp: string) => Promise<void>;
       onNavigate: (callback: (path: string) => void) => void;
+      getApiKey: () => Promise<{ key: string | null; provider?: string }>;
+      saveApiKey: (key: string) => Promise<void>;
+      getAiConfig: () => Promise<{ provider: string; hasKey: boolean; anthropicKey: boolean; openaiKey: boolean; minimaxKey: boolean }>;
+      saveAiConfig: (config: Record<string, string>) => Promise<void>;
+      runAiStrategies: (analysisResult: AnalysisResult) => Promise<{ strategies: AgentStrategy[]; error?: string; provider?: string }>;
       platform: string;
     };
   }
