@@ -40,6 +40,8 @@ ipcMain.handle('run-analysis', async (_event, args: {
   audience: string;
   benefit: string;
   region: string;
+  state?: string;
+  city?: string;
 }) => {
   const scriptPath = app.isPackaged
     ? path.join(process.resourcesPath, 'python', 'main.py')
@@ -57,6 +59,13 @@ ipcMain.handle('run-analysis', async (_event, args: {
     '--region', args.region,
     '--format', 'json',
   ];
+
+  if (args.state) {
+    spawnArgs.push('--state', args.state);
+  }
+  if (args.city) {
+    spawnArgs.push('--city', args.city);
+  }
 
   return new Promise((resolve, reject) => {
     const proc = spawn('python3', spawnArgs, { cwd });

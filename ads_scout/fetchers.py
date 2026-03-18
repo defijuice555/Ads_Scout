@@ -31,11 +31,31 @@ def setup_directories() -> None:
 
 
 # ======================
+# GEO HELPERS
+# ======================
+
+def build_geo_label(state: str = "", city: str = "") -> str:
+    """Build a location string from state + city for use in queries and cache keys.
+
+    Examples:
+        ("FL", "Miami") -> "Miami FL"
+        ("CA", "")      -> "California"
+        ("", "Miami")   -> "Miami"
+        ("", "")        -> ""
+    """
+    parts = [p for p in [city.strip(), state.strip()] if p]
+    return " ".join(parts)
+
+
+# ======================
 # CACHING
 # ======================
 
-def get_cache_path(keyword: str, source: str) -> str:
+def get_cache_path(keyword: str, source: str, geo: str = "") -> str:
     safe_keyword = re.sub(r"[^\w\-_]", "_", keyword.lower())
+    if geo:
+        safe_geo = re.sub(r"[^\w\-_]", "_", geo.lower())
+        return os.path.join(CACHE_DIR, f"{source}_{safe_keyword}_{safe_geo}.json")
     return os.path.join(CACHE_DIR, f"{source}_{safe_keyword}.json")
 
 
@@ -102,20 +122,37 @@ def make_ethical_request(
 # SOURCE FETCHERS
 # ======================
 
-def fetch_meta_ads(keyword: str, region: str = "US") -> List[Dict]:
+def fetch_meta_ads(keyword: str, region: str = "US", geo: str = "") -> List[Dict]:
     """Fetch product-related suggestions via Google Shopping suggest (Meta replacement)."""
-    cache_path = get_cache_path(keyword, "meta")
+    cache_path = get_cache_path(keyword, "meta", geo)
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
-    # Use Google Shopping suggestions as a proxy for commercial/ad intent data
     url = "https://suggestqueries.google.com/complete/search"
-    params = {"client": "firefox", "q": keyword, "hl": "en", "gl": region.lower(), "ds": "sh"}
-    resp = make_ethical_request(url, params=params, source="meta")
+    queries = [keyword]
+    if geo:
+        queries.append(f"{keyword} {geo}")
 
-    if not resp:
-        # Fallback to regular Google suggest with ad-related prefixes
+    all_items: List[Dict] = []
+    for q in queries:
+        params = {"client": "firefox", "q": q, "hl": "en", "gl": region.lower(), "ds": "sh"}
+        resp = make_ethical_request(url, params=params, source="meta")
+        if resp:
+            try:
+                data = resp.json()
+                if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
+                    for suggestion in data[1][:MIN_ADS_PER_SOURCE]:
+                        if isinstance(suggestion, str) and suggestion.lower() != q.lower():
+                            all_items.append({
+                                "text": suggestion,
+                                "type": "shopping_suggestion",
+                                "raw_length": len(suggestion),
+                            })
+            except Exception:
+                pass
+
+    if not all_items:
         items: List[Dict] = []
         for prefix in [f"{keyword} ad", f"{keyword} deal", f"buy {keyword}"]:
             fallback_params = {"client": "firefox", "q": prefix, "hl": "en", "gl": region.lower()}
@@ -133,36 +170,33 @@ def fetch_meta_ads(keyword: str, region: str = "US") -> List[Dict]:
         save_to_cache(result, cache_path)
         return result
 
-    try:
-        data = resp.json()
-        ads: List[Dict] = []
-        if isinstance(data, list) and len(data) >= 2 and isinstance(data[1], list):
-            for suggestion in data[1][:MIN_ADS_PER_SOURCE]:
-                if isinstance(suggestion, str) and suggestion.lower() != keyword.lower():
-                    ads.append({
-                        "text": suggestion,
-                        "type": "shopping_suggestion",
-                        "raw_length": len(suggestion),
-                    })
+    # Deduplicate
+    seen: set = set()
+    unique: List[Dict] = []
+    for item in all_items:
+        key = item["text"].lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
 
-        result = ads[:MIN_ADS_PER_SOURCE]
-        save_to_cache(result, cache_path)
-        logger.info(f"Google Shopping Suggest: Retrieved {len(result)} items for '{keyword}'")
-        return result
-    except Exception as e:
-        logger.error(f"Google Shopping Suggest parsing error: {e}")
-        return []
+    result = unique[:MIN_ADS_PER_SOURCE]
+    save_to_cache(result, cache_path)
+    logger.info(f"Google Shopping Suggest: Retrieved {len(result)} items for '{keyword}'{f' ({geo})' if geo else ''}")
+    return result
 
 
-def fetch_google_trends(keyword: str, region: str = "US") -> List[Dict]:
+def fetch_google_trends(keyword: str, region: str = "US", geo: str = "") -> List[Dict]:
     """Fetch trending suggestions via Google Suggest with trend-oriented prefixes."""
-    cache_path = get_cache_path(keyword, "google_trends")
+    cache_path = get_cache_path(keyword, "google_trends", geo)
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
     items: List[Dict] = []
     prefixes = [f"trending {keyword}", f"popular {keyword}", f"{keyword} 2026", keyword]
+    if geo:
+        prefixes.append(f"{keyword} {geo}")
+        prefixes.append(f"best {keyword} {geo}")
     url = "https://suggestqueries.google.com/complete/search"
 
     for prefix in prefixes:
@@ -189,19 +223,21 @@ def fetch_google_trends(keyword: str, region: str = "US") -> List[Dict]:
 
     result = unique[:MIN_ADS_PER_SOURCE]
     save_to_cache(result, cache_path)
-    logger.info(f"Google Trends (Suggest): Retrieved {len(result)} queries for '{keyword}'")
+    logger.info(f"Google Trends (Suggest): Retrieved {len(result)} queries for '{keyword}'{f' ({geo})' if geo else ''}")
     return result
 
 
-def fetch_answerthepublic(keyword: str, region: str = "us") -> List[Dict]:
+def fetch_answerthepublic(keyword: str, region: str = "us", geo: str = "") -> List[Dict]:
     """Fetch search suggestions via Google Suggest API (public, no auth)."""
-    cache_path = get_cache_path(keyword, "answerthepublic")
+    cache_path = get_cache_path(keyword, "answerthepublic", geo)
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
     items: List[Dict] = []
     prefixes = ["", "how to ", "best ", "why ", "what "]
+    if geo:
+        prefixes.append(f"{geo} ")
 
     for prefix in prefixes:
         query = f"{prefix}{keyword}".strip()
@@ -235,19 +271,20 @@ def fetch_answerthepublic(keyword: str, region: str = "us") -> List[Dict]:
     unique.sort(key=lambda x: x["engagement_potential"], reverse=True)
     result = unique[:MIN_ADS_PER_SOURCE]
     save_to_cache(result, cache_path)
-    logger.info(f"Google Suggest: Retrieved {len(result)} suggestions for '{keyword}'")
+    logger.info(f"Google Suggest: Retrieved {len(result)} suggestions for '{keyword}'{f' ({geo})' if geo else ''}")
     return result
 
 
-def fetch_tiktok_trends(keyword: str, region: str = "US") -> List[Dict]:
+def fetch_tiktok_trends(keyword: str, region: str = "US", geo: str = "") -> List[Dict]:
     """Fetch suggestions via Bing Suggest API (used as TikTok replacement)."""
-    cache_path = get_cache_path(keyword, "tiktok_creative_center")
+    cache_path = get_cache_path(keyword, "tiktok_creative_center", geo)
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
+    query = f"{keyword} {geo}".strip() if geo else keyword
     url = "https://api.bing.com/osjson.aspx"
-    params = {"query": keyword, "mkt": f"en-{region}", "maxwidth": "10"}
+    params = {"query": query, "mkt": f"en-{region}", "maxwidth": "10"}
     resp = make_ethical_request(url, params=params, source="tiktok_creative_center")
     if not resp:
         return []
@@ -267,22 +304,23 @@ def fetch_tiktok_trends(keyword: str, region: str = "US") -> List[Dict]:
 
         result = trends[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"Bing Suggest: Retrieved {len(result)} trends for '{keyword}'")
+        logger.info(f"Bing Suggest: Retrieved {len(result)} trends for '{keyword}'{f' ({geo})' if geo else ''}")
         return result
     except Exception as e:
         logger.error(f"Bing Suggest parsing error: {e}")
         return []
 
 
-def fetch_pinterest_trends(keyword: str, region: str = "US") -> List[Dict]:
+def fetch_pinterest_trends(keyword: str, region: str = "US", geo: str = "") -> List[Dict]:
     """Fetch suggestions via DuckDuckGo Suggest API (used as Pinterest replacement)."""
-    cache_path = get_cache_path(keyword, "pinterest_trends")
+    cache_path = get_cache_path(keyword, "pinterest_trends", geo)
     cached = load_from_cache(cache_path)
     if cached is not None:
         return cached
 
+    query = f"{keyword} {geo}".strip() if geo else keyword
     url = "https://duckduckgo.com/ac/"
-    params = {"q": keyword, "kl": f"{region.lower()}-en"}
+    params = {"q": query, "kl": f"{region.lower()}-en"}
     resp = make_ethical_request(url, params=params, source="pinterest_trends")
     if not resp:
         return []
@@ -303,7 +341,7 @@ def fetch_pinterest_trends(keyword: str, region: str = "US") -> List[Dict]:
 
         result = trends[:MIN_ADS_PER_SOURCE]
         save_to_cache(result, cache_path)
-        logger.info(f"DuckDuckGo Suggest: Retrieved {len(result)} suggestions for '{keyword}'")
+        logger.info(f"DuckDuckGo Suggest: Retrieved {len(result)} suggestions for '{keyword}'{f' ({geo})' if geo else ''}")
         return result
     except Exception as e:
         logger.error(f"DuckDuckGo Suggest parsing error: {e}")

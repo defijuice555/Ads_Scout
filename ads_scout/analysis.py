@@ -298,29 +298,76 @@ def _get_top_drivers(validated_trends: Dict, scores: Dict) -> List[Dict]:
 
 
 def _generate_optimization_tips(validated_trends: Dict, scores: Dict) -> List[str]:
-    tips = []
-    if scores["attention_grab"] < 0.3:
-        tips.append("Boost initial hook: Add surprising facts or curiosity gaps in first 3 seconds")
-    if scores["engagement"] < 0.4:
-        tips.append("Increase engagement: Use power words ('discover', 'unlock') and benefit-focused language")
-    if scores["conversion"] < 0.4:
-        if scores["urgency_pressure"] < 0.3:
-            tips.append("Add scarcity: Limited-time offers or low-stock warnings increase conversion by 22%")
-        if scores["trust_building"] < 0.4:
-            tips.append("Build trust: Include guarantees, certifications, or social proof elements")
-        if scores["emotional_valence"] < 0.2:
-            tips.append("Improve emotional balance: Increase positive emotions while reducing fear-based messaging")
+    tips: List[str] = []
 
+    # --- Weaknesses: what to fix ---
+    weak: List[str] = []
+    if scores.get("attention_grab", 0) < 0.3:
+        weak.append("attention_grab")
+        tips.append("Your opening hook is weak — lead with a bold stat, question, or unexpected claim in the first 3 seconds")
+    elif scores.get("attention_grab", 0) >= 0.6:
+        tips.append("Your hook is already strong — double down on this angle and test variations")
+
+    if scores.get("engagement", 0) < 0.4:
+        weak.append("engagement")
+        tips.append("Engagement is low — try benefit-first headlines and power words like 'discover', 'unlock', or 'finally'")
+    elif scores.get("engagement", 0) >= 0.6:
+        tips.append("Engagement signals are high — scale your best-performing creatives now")
+
+    if scores.get("trust_building", 0) < 0.4:
+        weak.append("trust_building")
+        tips.append("Trust is lacking — add social proof: customer reviews, certifications, or before/after results")
+    elif scores.get("trust_building", 0) >= 0.6:
+        tips.append("Trust signals are strong — lean into proof-heavy ads with testimonials and lab results")
+
+    if scores.get("conversion", 0) < 0.4:
+        weak.append("conversion")
+        if scores.get("urgency_pressure", 0) < 0.3:
+            tips.append("No urgency detected — create ethical scarcity with limited-time offers or seasonal angles")
+        else:
+            tips.append("Purchase intent is low — run awareness and education campaigns before pushing conversions")
+    elif scores.get("conversion", 0) >= 0.6:
+        tips.append("High purchase intent — push conversion campaigns with direct CTAs and retargeting")
+
+    if scores.get("emotional_valence", 0) < 0.2:
+        tips.append("Messaging feels negative or fear-based — balance with aspirational, positive language")
+    elif scores.get("emotional_valence", 0) >= 0.6:
+        tips.append("Positive sentiment is high — use joy and optimism-driven creative angles")
+
+    # --- Format recommendation based on actual trend data ---
     format_scores = {
         "video": validated_trends.get("format_video", {}).get("weighted_score", 0),
         "image": validated_trends.get("format_image", {}).get("weighted_score", 0),
         "carousel": validated_trends.get("format_carousel", {}).get("weighted_score", 0),
     }
     best_format = max(format_scores, key=format_scores.get)
-    if format_scores[best_format] > 0.5:
-        tips.append(f"Prioritize {best_format} ads: Currently showing strongest engagement")
+    if format_scores[best_format] > 0.3:
+        format_tip = {
+            "video": "Video is the top format — short-form (15-30s) with strong hooks outperforms static ads here",
+            "image": "Static images are winning — use bold visuals with clear benefit text overlays",
+            "carousel": "Carousel ads show highest engagement — tell a story across 3-5 slides",
+        }
+        tips.append(format_tip.get(best_format, f"Prioritize {best_format} ads for this market"))
 
-    return tips[:4]
+    # --- Trend-specific tips based on what signals actually came back ---
+    if "social_proof_conversion" in validated_trends:
+        tips.append("Social proof is a key driver — feature customer counts, ratings, or UGC in every ad")
+    if "risk_reversal_conversion" in validated_trends:
+        tips.append("Audience wants risk reversal — highlight money-back guarantees, free trials, or easy returns")
+    if "purchase_intent" in validated_trends:
+        pval = validated_trends["purchase_intent"].get("weighted_score", 0)
+        if pval > 0.5:
+            tips.append("Strong buying signals detected — run bottom-of-funnel conversion campaigns now")
+
+    # Deduplicate and return top 5
+    seen: set = set()
+    unique: List[str] = []
+    for t in tips:
+        key = t[:40]
+        if key not in seen:
+            seen.add(key)
+            unique.append(t)
+    return unique[:5]
 
 
 # ======================

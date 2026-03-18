@@ -20,17 +20,22 @@ function NavBar(): JSX.Element {
   const isActive = (p: string): boolean => location.pathname === p;
 
   return (
-    <nav className="flex items-center gap-6 border-b border-gray-800 px-6 py-3">
+    <nav
+      className="flex items-center gap-6 border-b border-gray-800 px-6 pb-3 pt-8"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
       <span className="text-lg font-bold text-indigo-400">Ads Scout</span>
       <Link
         to="/"
         className={`text-sm ${isActive('/') ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         Analysis
       </Link>
       <Link
         to="/history"
         className={`text-sm ${isActive('/history') ? 'text-white' : 'text-gray-400 hover:text-white'}`}
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         History
       </Link>

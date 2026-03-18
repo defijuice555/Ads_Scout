@@ -27,6 +27,8 @@ function exportToCSV(result: AnalysisResult): void {
   rows.push(['Metadata', 'Audience', result.audience]);
   rows.push(['Metadata', 'Benefit', result.benefit]);
   rows.push(['Metadata', 'Region', result.region]);
+  if (result.state) rows.push(['Metadata', 'State', result.state]);
+  if (result.city) rows.push(['Metadata', 'City', result.city]);
   rows.push(['Metadata', 'Timestamp', result.timestamp]);
 
   // Market Summary (if present)
@@ -117,7 +119,7 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
     <div className="space-y-6">
       {/* 1. Market Snapshot (compact top bar) */}
       {result.market_summary ? (
-        <MarketSnapshot summary={result.market_summary} keyword={result.keyword} />
+        <MarketSnapshot summary={result.market_summary} keyword={result.keyword} city={result.city} state={result.state} />
       ) : (
         <div className="bg-gray-800/50 rounded-xl p-4 flex items-center gap-3">
           <span className="inline-flex items-center justify-center w-10 h-10 rounded-full text-sm font-bold text-white bg-gray-600">
@@ -177,16 +179,24 @@ function ResultsDashboard({ result }: ResultsDashboardProps): JSX.Element {
       {/* 4. Platform Setup + Recommendations (side by side) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AudienceSpecs specs={audience_specs} />
-        <div className="bg-gray-800/50 rounded-xl p-4">
-          <h3 className="text-lg font-semibold text-gray-200 mb-3">Recommendations</h3>
+        <div className="bg-gray-800/50 rounded-xl p-5">
+          <h3 className="text-lg font-semibold text-gray-200 mb-1">What to Do Next</h3>
+          <p className="text-sm text-gray-400 mb-4">
+            Prioritized actions to improve your ad performance
+          </p>
           {conversion_analysis.recommendations.length > 0 ? (
-            <ol className="list-decimal list-inside space-y-2 text-sm text-gray-300">
+            <div className="space-y-3">
               {conversion_analysis.recommendations.map((rec, i) => (
-                <li key={i}>{rec}</li>
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-gray-700/40">
+                  <span className="flex-shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm text-gray-200 leading-relaxed">{rec}</p>
+                </div>
               ))}
-            </ol>
+            </div>
           ) : (
-            <p className="text-gray-500">No recommendations available</p>
+            <p className="text-gray-500 text-sm">No recommendations available</p>
           )}
         </div>
       </div>

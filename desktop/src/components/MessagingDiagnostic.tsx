@@ -74,7 +74,7 @@ function DimensionRow({
   score: number;
   tip: DimensionTooltip;
 }): JSX.Element {
-  const [showTooltip, setShowTooltip] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const pct = Math.round(score * 100);
   const action = score < 0.3 ? tip.low_action : tip.high_action;
 
@@ -83,20 +83,13 @@ function DimensionRow({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="text-sm text-gray-200 font-medium">{tip.label}</span>
-          <div
-            className="relative"
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-700 text-gray-400 text-[10px] cursor-pointer select-none hover:bg-gray-600 hover:text-gray-200 transition-colors"
+            aria-label={`Toggle ${tip.label} details`}
           >
-            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-700 text-gray-400 text-[10px] cursor-help select-none">
-              i
-            </span>
-            {showTooltip && (
-              <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-[300px] max-w-[300px] bg-gray-900 text-gray-200 text-xs p-3 rounded-lg shadow-xl pointer-events-none">
-                {tip.tooltip}
-              </div>
-            )}
-          </div>
+            {expanded ? '−' : 'i'}
+          </button>
         </div>
         <span className="text-sm text-gray-400 font-mono">{pct}%</span>
       </div>
@@ -109,6 +102,12 @@ function DimensionRow({
       </div>
 
       <p className="text-xs text-gray-400 leading-snug">{action}</p>
+
+      {expanded && (
+        <div className="mt-1 p-2.5 rounded-lg bg-gray-900/80 border border-gray-700 text-xs text-gray-300 leading-relaxed">
+          {tip.tooltip}
+        </div>
+      )}
     </div>
   );
 }
@@ -120,7 +119,7 @@ function MessagingDiagnostic({
   const tooltips = { ...DEFAULT_TOOLTIPS, ...dimensionTooltips };
 
   return (
-    <div className="bg-gray-800/50 rounded-xl p-5">
+    <div className="bg-gray-800/50 rounded-xl p-5 overflow-visible">
       <h3 className="text-lg font-semibold text-gray-200">Messaging Diagnostic</h3>
       <p className="text-sm text-gray-400 mb-4">Where is the messaging strong/weak?</p>
 

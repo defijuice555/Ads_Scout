@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", message=".*urllib3.*")
 
 from ads_scout.config import TREND_SOURCES, MIN_SOURCES_FOR_TREND, TREND_HISTORY_DAYS, OUTPUT_DIR, LOG_LEVEL
-from ads_scout.fetchers import setup_directories, FETCHER_MAP
+from ads_scout.fetchers import setup_directories, FETCHER_MAP, build_geo_label
 from ads_scout.analysis import (
     extract_generalized_trends,
     validate_trends,
@@ -28,13 +28,17 @@ from ads_scout.analysis import (
 )
 
 
-def run_analysis(keyword: str, product: str, audience: str, benefit: str, region: str = "US") -> dict:
+def run_analysis(
+    keyword: str, product: str, audience: str, benefit: str,
+    region: str = "US", state: str = "", city: str = "",
+) -> dict:
     """Run the full analysis pipeline and return structured results.
 
     This function does NOT print anything — it only returns data.
     Logging goes to file only.
     """
     logger = logging.getLogger(__name__)
+    geo = build_geo_label(state, city)
 
     # 1. Fetch from all enabled sources
     source_data: dict = {}
@@ -45,7 +49,7 @@ def run_analysis(keyword: str, product: str, audience: str, benefit: str, region
         try:
             fetcher = FETCHER_MAP.get(source)
             if fetcher:
-                source_data[source] = fetcher(keyword, region)
+                source_data[source] = fetcher(keyword, region, geo)
                 if source_data[source]:
                     sources_status[source] = {"count": len(source_data[source]), "status": "ok"}
                 else:
@@ -96,6 +100,8 @@ def run_analysis(keyword: str, product: str, audience: str, benefit: str, region
         "audience": audience,
         "benefit": benefit,
         "region": region,
+        "state": state,
+        "city": city,
         "sources": sources_status,
         "validated_trends": validated_trends,
         "conversion_analysis": analysis,
@@ -209,6 +215,8 @@ def main() -> None:
     parser.add_argument("--audience", required=True, help="Your target audience")
     parser.add_argument("--benefit", required=True, help="Your unique value proposition")
     parser.add_argument("--region", default="US", help="Target region (default: US)")
+    parser.add_argument("--state", default="", help="Target state abbreviation (e.g. FL, CA)")
+    parser.add_argument("--city", default="", help="Target city for localized suggestions (e.g. Miami)")
     parser.add_argument("--format", choices=["text", "json"], default="text",
                         help="Output format: text (human-readable) or json (machine-readable)")
     args = parser.parse_args()
@@ -228,7 +236,7 @@ def main() -> None:
     )
 
     # Run pipeline
-    result = run_analysis(args.keyword, args.product, args.audience, args.benefit, args.region)
+    result = run_analysis(args.keyword, args.product, args.audience, args.benefit, args.region, args.state, args.city)
 
     # Output
     if args.format == "json":

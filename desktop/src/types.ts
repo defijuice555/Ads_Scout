@@ -24,6 +24,8 @@ export interface AnalysisResult {
   audience: string;
   benefit: string;
   region: string;
+  state?: string;
+  city?: string;
   sources: Record<string, { count: number; status: string }>;
   validated_trends: Record<string, TrendData>;
   conversion_analysis: ConversionAnalysis;
@@ -91,6 +93,8 @@ export interface AnalysisInput {
   audience: string;
   benefit: string;
   region: string;
+  state?: string;
+  city?: string;
 }
 
 declare global {
