@@ -1,0 +1,9 @@
+ethical_ad_insights/
+node_modules/
+dist/
+dist-electron/
+release/
+__pycache__/
+*.pyc
+.env
+.DS_Store
