@@ -1,20 +1,27 @@
-# Ads Scout
-Ads Scout — an Ethical Ad Intelligence desktop app that analyzes ad trends and generates creative briefs.
+Content Structure
 
-Summary
-Full Electron + React + Vite desktop app — scaffold, IPC bridge, Python backend integration
-Agency-grade dashboard — market snapshot with opportunity score, messaging diagnostic bars, creative briefs, audience specs
-State + city geo-targeting — localized search suggestions (e.g., "dental implant Miami FL") across all 5 data sources with geo-aware caching
-5 dental preset templates — one-click analysis for implants, whitening, Invisalign, emergency, veneers with pre-filled city/state
-Human-readable UX — "Who to Target" and "What to Do Next" panels replace raw JSON, inline expandable descriptions replace clipped tooltips
-Analysis history — auto-save, browse, delete past analyses
-CSV export — full results with geo metadata
-Loading, error, empty states — Python environment check, retry on empty trends
-Test plan
- cd desktop && npm run dev — app launches, no compile errors
- Click "Dental Implants" preset — auto-fills Miami, FL
- Run analysis — results include Miami-specific suggestions
- Change state to CA, re-run — different results (fresh cache key)
- Click score badge — expands breakdown inline
- Export CSV — includes state/city in metadata
- Check history page — previous analyses saved and browsable
+Ethical Ad Intelligence Platform
+What it does — One paragraph: analyzes public search trends across Google/Bing/DuckDuckGo to generate original ad strategies without copying competitor ads
+Key Features (with section headers):
+
+3-Agent AI Strategy Engine — 3 competing emotional AI agents (Pain/Fear, Desire/Aspiration, Urgency/Scarcity) generate different ad angles; vote on a winner
+Multi-Provider LLM Support — Anthropic Claude, OpenAI GPT-4o, MiniMax M2 — switch providers from the UI
+Hyper-Local Geo-Targeting — State + city level targeting across all 50 US states; search suggestions localized to specific markets
+20 Dental Preset Templates — One-click templates for dental practices (implants, Invisalign, whitening, emergency, etc.) with city/state pre-filled
+Conversion Intelligence — 5-dimension scoring (emotional valence, attention grab, trust building, urgency pressure, specificity) with actionable tooltips
+Creative Briefs — Rule-based creative matrix generates headline directions, CTAs, formats, platform recommendations
+Structured CSV Export — 8-section table format designed for downstream AI agent consumption (metadata, dimensions, drivers, signals, briefs, AI strategies, recommendations, audience specs)
+Ethical by Design — Analyzes generalized patterns only, never stores or copies specific ads
+
+
+Screenshots — placeholder section for future screenshots
+Tech Stack — Electron + React + Vite + TypeScript frontend, Python backend, IPC bridge
+Getting Started — Prerequisites (Node 18+, Python 3.8+), install steps, run dev
+Architecture — Brief diagram: Electron shell → React UI → IPC → Python pipeline → Suggest APIs
+Configuration — API keys stored in ~/.ads-scout/config.json (never committed), provider selection
+License — MIT
+
+Verification
+
+README renders correctly on GitHub (check markdown formatting)
+No sensitive info (API keys, paths) in README
