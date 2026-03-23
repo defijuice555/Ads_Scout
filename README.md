@@ -1,7 +1,8 @@
 Content Structure
 
 Ethical Ad Intelligence Platform
-What it does — One paragraph: analyzes public search trends across Google/Bing/DuckDuckGo to generate original ad strategies without copying competitor ads
+Analyzes public search trends across Google/Bing/DuckDuckGo to generate original ad strategies without copying competitor ads
+
 Key Features (with section headers):
 
 3-Agent AI Strategy Engine — 3 competing emotional AI agents (Pain/Fear, Desire/Aspiration, Urgency/Scarcity) generate different ad angles; vote on a winner
